@@ -7,6 +7,7 @@
 # Adapted for AutoFocusFormer by Ziwen 2023
 
 from .aff_transformer import AutoFocusFormer
+from .maskfiner_oracle_teacher_model import MaskFinerOracleTeacher
 
 
 def build_model(config):
@@ -28,6 +29,10 @@ def build_model(config):
                                 patch_norm=config.MODEL.AFF.PATCH_NORM,
                                 layer_scale=config.MODEL.AFF.LAYER_SCALE,
                                 img_size=config.DATA.IMG_SIZE)
+    if model_type = 'maskfinerOT':
+        model = MaskFinerOracleTeacher(
+
+        )
     else:
         raise NotImplementedError(f"Unkown model: {model_type}")
 

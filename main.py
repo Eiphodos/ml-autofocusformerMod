@@ -111,7 +111,7 @@ def main(config, logger):
 
     # build scheduler
     if config.TRAIN.ACCUMULATION_STEPS > 1:
-        lr_scheduler build_scheduler(config, optimizer, len(data_loader_train) // config.TRAIN.ACCUMULATION_STEPS)
+        lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train) // config.TRAIN.ACCUMULATION_STEPS)
     else:
         lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
 
