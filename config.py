@@ -70,6 +70,28 @@ _C.MODEL.AFF.DS_RATE = 0.25
 _C.MODEL.AFF.LAYER_SCALE = 0.0
 _C.MODEL.AFF.RESERVE = True
 
+
+# OT parameters
+_C.MODEL.MR = CN()
+_C.MODEL.MR.NAME = ["MixResViT", "MixResNeighbour", "MixResNeighbour", "MixResNeighbour"]
+_C.MODEL.MR.EMBED_DIM = [512, 256, 128, 64]
+_C.MODEL.MR.DEPTHS = [4, 4, 4, 4]
+_C.MODEL.MR.NUM_HEADS = [32, 16, 8, 4]
+_C.MODEL.MR.PATCH_SIZES = [32, 16, 8, 4]
+_C.MODEL.MR.SPLIT_RATIO = [4, 4, 4, 4]
+_C.MODEL.MR.MLP_RATIO = [4., 4., 4., 4.]
+_C.MODEL.MR.UPSCALE_RATIO = [0.25, 0.25, 0.25, 0.25]
+_C.MODEL.MR.DROP_RATE = [0.0, 0.0, 0.0, 0.0]
+_C.MODEL.MR.DROP_PATH_RATE = [0.3, 0.3, 0.3, 0.3]
+_C.MODEL.MR.ATTN_DROP_RATE = [0.0, 0.0, 0.0, 0.0]
+_C.MODEL.MR.OUT_FEATURES = ["res2", "res3", "res4", "res5"]
+_C.MODEL.MR.CLUSTER_SIZE = [8, 8, 8, 8]
+_C.MODEL.MR.NBHD_SIZE = [48, 48, 48, 48]
+_C.MODEL.MR.KEEP_OLD_SCALE = False
+_C.MODEL.MR.ADD_IMAGE_DATA_TO_ALL = False
+_C.MODEL.MR.OUT_DIM = 256
+_C.MODEL.MR.N_RESOLUTION_SCALES = 4
+
 # -----------------------------------------------------------------------------
 # Training settings
 # -----------------------------------------------------------------------------
@@ -171,18 +193,18 @@ _C.THROUGHPUT_MODE = False
 _C.LOCAL_RANK = 0
 
 
-def _update_config_from_file(config, cfg_file):
+def _update_config_from_file(config, _C_file):
     config.defrost()
-    with open(cfg_file, 'r') as f:
-        yaml_cfg = yaml.load(f, Loader=yaml.FullLoader)
+    with open(_C_file, 'r') as f:
+        yaml__C = yaml.load(f, Loader=yaml.FullLoader)
 
-    for cfg in yaml_cfg.setdefault('BASE', ['']):
-        if cfg:
+    for _C in yaml__C.setdefault('BASE', ['']):
+        if _C:
             _update_config_from_file(
-                config, os.path.join(os.path.dirname(cfg_file), cfg)
+                config, os.path.join(os.path.dirname(_C_file), _C)
             )
-    print('=> merge config from {}'.format(cfg_file))
-    config.merge_from_file(cfg_file)
+    print('=> merge config from {}'.format(_C_file))
+    config.merge_from_file(_C_file)
     config.freeze()
 
 
@@ -225,7 +247,7 @@ def update_config(config, args):
 
 
 def get_config(args):
-    """Get a yacs CfgNode object with default values."""
+    """Get a yacs _CNode object with default values."""
     # Return a clone so that the defaults will not be altered
     # This is for the "local variable" use pattern
     config = _C.clone()

@@ -6,9 +6,63 @@ https://github.com/rwightman/pytorch-image-models
 import torch
 import torch.nn as nn
 from einops import rearrange
-from ..transformer_decoder.position_encoding import PositionEmbeddingSine
 
-from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
+
+class PositionEmbeddingSine(nn.Module):
+    """
+    This is a more standard version of the position embedding, very similar to the one
+    used by the Attention is all you need paper, generalized to work on images.
+    """
+
+    def __init__(self, num_pos_feats=64, temperature=10000, normalize=False, scale=None):
+        super().__init__()
+        self.num_pos_feats = num_pos_feats
+        self.temperature = temperature
+        self.normalize = normalize
+        if scale is not None and normalize is False:
+            raise ValueError("normalize should be True if scale is passed")
+        if scale is None:
+            scale = 2 * math.pi
+        self.scale = scale
+
+    def forward(self, pos):
+        '''
+        pos - b x n x d
+        '''
+        b, n, d = pos.shape
+        y_embed = pos[:, :, 1]  # b x n
+        x_embed = pos[:, :, 0]
+        if self.normalize:
+            eps = 1e-6
+            y_embed = y_embed / (y_embed.max() + eps) * self.scale
+            x_embed = x_embed / (x_embed.max() + eps) * self.scale
+
+        dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=pos.device)  # npf
+        dim_t = self.temperature ** (2 * (dim_t.div(2, rounding_mode='floor')) / self.num_pos_feats)  # npf
+
+        pos_x = x_embed[:, :, None] / dim_t  # b x n x npf
+        pos_y = y_embed[:, :, None] / dim_t
+        pos_x = torch.cat(
+            (pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), dim=2
+        )
+        pos_y = torch.cat(
+            (pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), dim=2
+        )
+        pos = torch.cat((pos_x, pos_y), dim=2)  # b x n x d'
+        return pos
+
+    def __repr__(self, _repr_indent=4):
+        head = "Positional encoding " + self.__class__.__name__
+        body = [
+            "num_pos_feats: {}".format(self.num_pos_feats),
+            "temperature: {}".format(self.temperature),
+            "normalize: {}".format(self.normalize),
+            "scale: {}".format(self.scale),
+        ]
+        # _repr_indent = 4
+        lines = [head] + [" " * _repr_indent + line for line in body]
+        return "\n".join(lines)
+
 
 def get_2dpos_of_curr_ps_in_min_ps(height, width, patch_size, min_patch_size, scale):
     patches_coords = torch.meshgrid(torch.arange(0, width // min_patch_size, patch_size // min_patch_size), torch.arange(0, height // min_patch_size, patch_size // min_patch_size), indexing='ij')
@@ -217,7 +271,7 @@ class TransformerLayer(nn.Module):
         return x
 
 
-class MRVIT(nn.Module):
+class MixResViT(nn.Module):
     def __init__(
             self,
             patch_sizes,
@@ -231,7 +285,8 @@ class MRVIT(nn.Module):
             split_ratio=4,
             n_scales=2,
             min_patch_size=4,
-            upscale_ratio=0.5
+            upscale_ratio=0.5,
+            out_features=['res5']
     ):
         super().__init__()
         self.patch_size = patch_sizes[-1]
@@ -253,6 +308,7 @@ class MRVIT(nn.Module):
 
         num_features = d_model
         self.num_features = num_features
+        self._out_features = out_features
 
         # Pos Embs
         self.pe_layer = PositionEmbeddingSine(d_model // 2, normalize=True)
@@ -264,6 +320,8 @@ class MRVIT(nn.Module):
         self.pre_logits = nn.Identity()
         self.norm_out = nn.LayerNorm(d_model)
         self.apply(init_weights)
+
+        print("Successfully built MixResViT model!")
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -297,102 +355,3 @@ class MRVIT(nn.Module):
         outs[out_name + "_scale"] = pos[:, :, 0]
         outs["min_spatial_shape"] = min_patched_im_size
         return outs
-
-
-@BACKBONE_REGISTRY.register()
-class MixResViT(MRVIT, Backbone):
-    def __init__(self, cfg, layer_index):
-        in_chans = 3
-        n_scales = cfg.MODEL.MASK_FINER.NUM_RESOLUTION_SCALES
-        min_patch_size = cfg.MODEL.MR.PATCH_SIZES[-1]
-
-        #patch_size = cfg.MODEL.MR.PATCH_SIZES[layer_index]
-        patch_sizes = cfg.MODEL.MR.PATCH_SIZES[:layer_index + 1]
-        embed_dim = cfg.MODEL.MR.EMBED_DIM[layer_index]
-        depths = cfg.MODEL.MR.DEPTHS[layer_index]
-        mlp_ratio = cfg.MODEL.MR.MLP_RATIO[layer_index]
-        num_heads = cfg.MODEL.MR.NUM_HEADS[layer_index]
-        drop_rate = cfg.MODEL.MR.DROP_RATE[layer_index]
-        drop_path_rate = cfg.MODEL.MR.DROP_PATH_RATE[layer_index]
-        split_ratio = cfg.MODEL.MR.SPLIT_RATIO[layer_index]
-        upscale_ratio = cfg.MODEL.MR.UPSCALE_RATIO[layer_index]
-
-        super().__init__(
-            patch_sizes=patch_sizes,
-            n_layers=depths,
-            d_model=embed_dim,
-            n_heads=num_heads,
-            mlp_ratio=mlp_ratio,
-            dropout=drop_rate,
-            drop_path_rate=drop_path_rate,
-            split_ratio=split_ratio,
-            channels=in_chans,
-            n_scales=n_scales,
-            min_patch_size=min_patch_size,
-            upscale_ratio=upscale_ratio
-        )
-
-        self._out_features = cfg.MODEL.MR.OUT_FEATURES[-(layer_index+1):]
-        out_index = (n_scales - 1) + 2
-        self._out_feature_strides = {"res{}".format(out_index): cfg.MODEL.MR.PATCH_SIZES[layer_index]}
-        # self._out_feature_strides = {"res{}".format(i + 2): cfg.MODEL.MRML.PATCH_SIZES[-1] for i in range(num_scales)}
-        # print("backbone strides: {}".format(self._out_feature_strides))
-        # self._out_feature_channels = { "res{}".format(i+2): list(reversed(self.num_features))[i] for i in range(num_scales)}
-        self._out_feature_channels = {"res{}".format(out_index): embed_dim}
-        # print("backbone channels: {}".format(self._out_feature_channels))
-
-    def forward(self, x, scale, features, features_pos, upsampling_mask):
-        """
-        Args:
-            x: Tensor of shape (B,C,H,W)
-        Returns:
-            dict[str->Tensor]: names and the corresponding features
-        """
-        assert (
-            x.dim() == 4
-        ), f"MRML takes an input of shape (N, C, H, W). Got {x.shape} instead!"
-        y = super().forward(x, scale, features, features_pos, upsampling_mask)
-        return y
-
-    def output_shape(self):
-        return {
-            name: ShapeSpec(
-                channels=self._out_feature_channels[name], stride=self._out_feature_strides[name]
-            )
-            for name in self._out_features
-        }
-
-    def test_pos_cover_and_overlap(self, pos, im_h, im_w, scale_max):
-        print("Testing position cover and overlap in level {}".format(scale_max))
-        pos_true = torch.meshgrid(torch.arange(0, im_w), torch.arange(0, im_h), indexing='ij')
-        pos_true = torch.stack([pos_true[0], pos_true[1]]).permute(1, 2, 0).view(-1, 2).to(pos.device).half()
-
-        all_pos = []
-
-        for s in range(scale_max + 1):
-            n_scale_idx = torch.where(pos[:, 0] == s)
-            pos_at_scale = pos[n_scale_idx[0].long(), 1:]
-            pos_at_org_scale = pos_at_scale*self.min_patch_size
-            patch_size = self.patch_sizes[s]
-            new_coords = torch.stack(torch.meshgrid(torch.arange(0, patch_size), torch.arange(0, patch_size)))
-            new_coords = new_coords.view(2, -1).permute(1, 0).to(pos.device)
-            pos_at_org_scale = pos_at_org_scale.unsqueeze(1) + new_coords
-            pos_at_org_scale = pos_at_org_scale.reshape(-1, 2)
-            all_pos.append(pos_at_org_scale)
-
-        all_pos = torch.cat(all_pos).half()
-
-        print("Computing cover in level {}".format(scale_max))
-        cover = torch.tensor([all(torch.any(i == all_pos, dim=0)) for i in pos_true])
-        print("Finished computing cover in level {}".format(scale_max))
-        if not all(cover):
-            print("Total pos map is not covered in level {}, missing {} positions".format(scale_max, sum(~cover)))
-            missing = pos_true[~cover]
-            print("Missing positions: {}".format(missing))
-        print("Computing duplicates in level {}".format(scale_max))
-        dupli_unq, dupli_idx, dupli_counts = torch.unique(all_pos, dim=0, return_counts=True, return_inverse=True)
-        if len(dupli_counts) > len(all_pos):
-            print("Found {} duplicate posses in level {}".format(sum(dupli_counts > 1), scale_max))
-        print("Finished computing duplicates in level {}".format(scale_max))
-
-        return True

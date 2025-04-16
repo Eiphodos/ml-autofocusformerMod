@@ -3,32 +3,33 @@ MODEL:
   NAME: maskfiner_oracle_teacher
   DROP_PATH_RATE: 0.0
   MR:
-    DEPTHS: [ 2, 2, 6, 2]
-    NUM_HEADS: [ 2, 4, 8, 16 ]
-    MLP_RATIO: 2.
-    EMBED_DIM: [32,128,256,384]
-    CLUSTER_SIZE: 8
-    NBHD_SIZE: [48,48,48,49]
-    ALPHA: 4.0
-    DS_RATE: 0.25
-  MR_DECODER:
-    DEPTHS: [ 2, 2, 6, 2 ]
-    NUM_HEADS: [ 2, 4, 8, 16 ]
-    MLP_RATIO: 2.
-    EMBED_DIM: [ 32,128,256,384 ]
-    CLUSTER_SIZE: 8
-    NBHD_SIZE: [ 48,48,48,49 ]
-    ALPHA: 4.0
-    DS_RATE: 0.25
+    NAME: ["MixResViT","MixResNeighbour", "MixResNeighbour", "MixResNeighbour"]
+    EMBED_DIM: [512,256,128,64]
+    DEPTHS: [8, 4, 8, 16]
+    NUM_HEADS: [ 16, 8, 4, 2 ]
+    PATCH_SIZES: [32, 16, 8, 4]
+    DROP_RATE: [0.1, 0.0, 0.1, 0.3]
+    DROP_PATH_RATE: [0.0, 0.0, 0.0, 0.0]
+    ATTN_DROP_RATE: [0.0, 0.0, 0.0, 0.0]
+    UPSCALE_RATIO: [0.0, 0.75, 0.6, 0.6]
+    SPLIT_RATIO: [4, 4, 4, 4]
+    MLP_RATIO: [2., 3., 3., 3.]
+    CLUSTER_SIZE: [8, 8, 8, 8]
+    NBHD_SIZE: [48,48,48,48]
+    OUT_FEATURES: ["res2", "res3", "res4", "res5"]
+    KEEP_OLD_SCALE: True
+    ADD_IMAGE_DATA_TO_ALL: True
+    OUT_DIM: 256
+    N_RESOLUTION_SCALES: 4
 DATA:
   DATASET: imagenet 
   IMG_SIZE: 224
-  BATCH_SIZE: 1024 
+  BATCH_SIZE: 256
 TRAIN:
   EPOCHS: 300
   BASE_LR: 5e-4
   MIN_LR: 5e-6
   WARMUP_LR: 5e-7
 AUG:
-  MIXUP: 0.0
-  CUTMIX: 0.0
+  MIXUP: 0.8
+  CUTMIX: 1.0
