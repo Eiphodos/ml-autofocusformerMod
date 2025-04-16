@@ -129,7 +129,7 @@ class OracleTeacherBackbone(nn.Module):
 
 
     def generate_random_upsampling_mask(self, batch_size, n_tokens):
-        upsampling_mask = torch.randn(batch_size, n_tokens)
+        upsampling_mask = torch.randn(batch_size, n_tokens).float().to('cuda')
         return upsampling_mask
     def find_pos_org_order(self, pos_org, pos_shuffled):
         dists = torch.cdist(pos_org.float(), pos_shuffled.float(), p=1)  # Manhattan distance
