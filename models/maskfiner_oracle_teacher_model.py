@@ -46,7 +46,7 @@ class OracleTeacherBackbone(nn.Module):
             feat_projs.append(scale_projs)
         self.feat_proj = nn.ModuleList(feat_projs)
 
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         out_projs = []
         for dim in backbone_dims:
