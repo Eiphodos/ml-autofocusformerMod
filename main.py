@@ -176,11 +176,12 @@ def main(config, logger):
 
         if (epoch % config.EVAL_FREQ == 0 or epoch == (num_epochs - 1)):
             acc1, acc5, loss = validate(config, data_loader_val, model, logger)
-            wandb_logger.log({
-                "val/acc1": acc1,
-                "val/acc5": acc5,
-                "val/loss": loss
-            })
+            if get_rank() == 0:
+                wandb_logger.log({
+                    "val/acc1": acc1,
+                    "val/acc5": acc5,
+                    "val/loss": loss
+                })
             logger.info(f"Accuracy of the network: {acc1:.1f}%")
             max_accuracy = max(max_accuracy, acc1)
             logger.info(f'Max accuracy: {max_accuracy:.2f}%')
@@ -262,8 +263,8 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         scaler_meter.update(loss_scale_value)
         batch_time.update(time.time() - end)
         end = time.time()
-
-        wandb_logger.log({"train/loss": loss_meter.val})
+        if get_rank() == 0:
+            wandb_logger.log({"train/loss": loss_meter.val})
 
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
             lr = optimizer.param_groups[0]['lr']
