@@ -475,7 +475,8 @@ class MixResNeighbour(nn.Module):
             upscale_ratio=0.25,
             keep_old_scale=False,
             scale=1,
-            add_image_data_to_all=False
+            add_image_data_to_all=False,
+            out_features=['res5']
     ):
         super().__init__()
         self.patch_size = patch_sizes[-1]
@@ -494,6 +495,7 @@ class MixResNeighbour(nn.Module):
         self.keep_old_scale = keep_old_scale
         self.scale = scale
         self.add_image_data_to_all = add_image_data_to_all
+        self._out_features = out_features
 
         num_features = d_model
         self.num_features = num_features
