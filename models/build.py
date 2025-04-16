@@ -75,7 +75,7 @@ def build_model(config):
                 raise NotImplementedError(f"Unkown model: {model_type}")
             backbones.append(bb)
         model = OracleTeacherBackbone(backbones=backbones,
-                                      backbone_dims=config.MODEL.MR.EMBED_DIMS,
+                                      backbone_dims=config.MODEL.MR.EMBED_DIM,
                                       out_dim=config.MODEL.MR.OUT_DIM,
                                       all_out_features=config.MODEL.MR.OUT_FEATURES,
                                       n_scales=config.MODEL.MR.N_RESOLUTION_SCALES,
