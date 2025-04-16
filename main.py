@@ -14,6 +14,8 @@ import numpy as np
 import random
 import copy
 
+import wandb
+
 import torch
 import torch.backends.cudnn as cudnn
 
@@ -72,6 +74,12 @@ def main(config, logger):
         config: CfgNode object, containing training and model configs
         logger: logger object for logging
     """
+
+    if get_rank() == 0:
+        wandb.login()
+        wandb_logger = wandb.init(project="CandidateNet", entity="eiphodos", config=config, settings=wandb.Settings(start_method="thread", console="off"))
+    else:
+        wandb_logger = None
 
     # build dataloader
     data_loader_train, data_loader_val, mixup_fn = build_loader(config)
@@ -161,13 +169,18 @@ def main(config, logger):
     for epoch in range(config.TRAIN.START_EPOCH, num_epochs):
         data_loader_train.sampler.set_epoch(epoch)
 
-        train_one_epoch(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, logger, model_ema=model_ema, total_epochs=num_epochs)
+        train_one_epoch(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, logger, wandb_logger, model_ema=model_ema, total_epochs=num_epochs)
         if get_rank() == 0 and ((epoch+1) % config.SAVE_FREQ == 0 or epoch == (config.TRAIN.EPOCHS - 1) or epoch == 0):
             save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, loss_scaler, logger, model_ema=model_ema, total_epochs=num_epochs)
         torch.cuda.synchronize()
 
         if (epoch % config.EVAL_FREQ == 0 or epoch == (num_epochs - 1)):
             acc1, acc5, loss = validate(config, data_loader_val, model, logger)
+            wandb_logger.log({
+                "val/acc1": acc1,
+                "val/acc5": acc5,
+                "val/loss": loss
+            })
             logger.info(f"Accuracy of the network: {acc1:.1f}%")
             max_accuracy = max(max_accuracy, acc1)
             logger.info(f'Max accuracy: {max_accuracy:.2f}%')
@@ -182,7 +195,7 @@ def main(config, logger):
     logger.info('Training time {}'.format(total_time_str))
 
 
-def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, logger, model_ema=None, total_epochs=None):
+def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, logger, wandb_logger, model_ema=None, total_epochs=None):
     """
     Trains the model for one epoch
     Args:
@@ -249,6 +262,8 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         scaler_meter.update(loss_scale_value)
         batch_time.update(time.time() - end)
         end = time.time()
+
+        wandb_logger.log({"train/loss": loss_meter.val})
 
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
             lr = optimizer.param_groups[0]['lr']
