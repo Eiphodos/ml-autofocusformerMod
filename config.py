@@ -238,7 +238,10 @@ def update_config(config, args):
         config.TRAIN.EPOCHS = args.epochs
 
     # set local rank for distributed training
-    config.LOCAL_RANK = args.local_rank
+    if 'LOCAL_RANK' in os.environ:
+        config.LOCAL_RANK = int(os.environ['LOCAL_RANK'])
+    else:
+        config.LOCAL_RANK = args.local_rank
 
     # output folder
     config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG)

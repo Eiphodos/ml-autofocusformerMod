@@ -129,14 +129,16 @@ def reduce_tensor(tensor):
 
 
 def init_distributed_mode():
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ and 'LOCAL_RANK' in os.environ:
         rank = int(os.environ["RANK"])
         world_size = int(os.environ['WORLD_SIZE'])
-        print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
+        local_rank = int(os.environ['LOCAL_RANK'])
+        print(f"RANK and LOCAL_RANK and WORLD_SIZE in environ: {rank}/{local_rank}/{world_size}")
     else:
         rank = -1
+        local_rank = -1
         world_size = -1
-    torch.cuda.set_device(rank)
+    torch.cuda.set_device(local_rank)
     torch.distributed.init_process_group(backend='nccl', init_method='env://', world_size=world_size, rank=rank)
     torch.distributed.barrier()
 
