@@ -112,7 +112,10 @@ def get_rank():
 def get_local_rank():
     if not is_dist_avail_and_initialized():
         return 0
-    return dist.get_rank()
+    elif 'LOCAL_RANK' in os.environ:
+        return int(os.environ['LOCAL_RANK'])
+    else:
+        return dist.get_rank()
 
 
 def get_world_size():
