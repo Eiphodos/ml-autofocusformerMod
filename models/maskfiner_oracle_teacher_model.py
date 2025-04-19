@@ -37,14 +37,21 @@ class OracleTeacherBackbone(nn.Module):
         self.num_classes = num_classes
 
         feat_projs = []
+        feat_norms = []
         for i in range(len(self.backbones)):
             scale_projs = []
+            scale_norms = []
             for j in range(len(self.backbones[i]._out_features) - 1):
                 f_proj = nn.Linear(backbone_dims[i], backbone_dims[j])
+                f_norm = nn.LayerNorm(backbone_dims[j])
                 scale_projs.append(f_proj)
+                scale_norms.append(f_norm)
             scale_projs = nn.ModuleList(scale_projs)
+            scale_norms = nn.ModuleList(scale_norms)
             feat_projs.append(scale_projs)
+            feat_norms.append(scale_norms)
         self.feat_proj = nn.ModuleList(feat_projs)
+        self.feat_norm = nn.ModuleList(feat_norms)
 
         self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
 
@@ -57,7 +64,7 @@ class OracleTeacherBackbone(nn.Module):
             nn.init.xavier_uniform_(out_projs[-1][0].weight, gain=1)
             nn.init.constant_(out_projs[-1][0].bias, 0)
         self.out_proj = nn.ModuleList(out_projs)
-        self.out_norm = nn.LayerNorm(out_dim)
+
 
         print("Successfully built OracleTeacherBackbone model!")
 
@@ -94,7 +101,7 @@ class OracleTeacherBackbone(nn.Module):
                     feat_scale = feat_scale[b_, pos_indices]
                     assert (outs[f + '_pos'] == feat_pos).all()
                     orig_dtype = feat.dtype
-                    outs[f] = outs[f] + self.out_norm(self.feat_proj[scale][curr_scale](feat).float()).to(orig_dtype)
+                    outs[f] = outs[f] + self.feat_norm[scale][curr_scale](self.feat_proj[scale][curr_scale](feat).float()).to(orig_dtype)
                 else:
                     outs[f] = feat
                     outs[f + '_pos'] = feat_pos
