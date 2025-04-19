@@ -616,7 +616,7 @@ class MixResNeighbour(nn.Module):
     def split_features(self, tokens_to_split):
         x_splitted = self.split(tokens_to_split)
         x_splitted = rearrange(x_splitted, 'b n (s d) -> b n s d', s=self.split_ratio).contiguous()
-        x_splitted = x_splitted + 0.1*self.rel_pos_emb + 0.1*self.scale_emb
+        x_splitted = x_splitted + self.rel_pos_emb + self.scale_emb
         x_splitted = rearrange(x_splitted, 'b n s d -> b (n s) d', s=self.split_ratio).contiguous()
         return x_splitted
 
