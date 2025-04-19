@@ -34,8 +34,8 @@ class PositionEmbeddingSine(nn.Module):
         x_embed = pos[:, :, 0]
         if self.normalize:
             eps = 1e-6
-            y_embed = y_embed / (y_embed.max() + eps) * self.scale
-            x_embed = x_embed / (x_embed.max() + eps) * self.scale
+            y_embed = torch.clamp(y_embed / (y_embed.max() + eps), 0, 1) * self.scale
+            x_embed = torch.clamp(x_embed / (x_embed.max() + eps), 0 , 1) * self.scale
 
         dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=pos.device)  # npf
         dim_t = self.temperature ** (2 * (dim_t.div(2, rounding_mode='floor')) / self.num_pos_feats)  # npf
@@ -177,12 +177,13 @@ class Block(nn.Module):
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(self, x, return_attention=False):
-        y, attn = self.attn(self.norm1(x))
+        orig_dtype = x.dtype
+        y, attn = self.attn(self.norm1(x.float()))
         if return_attention:
             return attn
         x = x + self.drop_path(y)
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x
+        x = x + self.drop_path(self.mlp(self.norm2(x.float())))
+        return x.to(orig_dtype)
 
 class DownSampleConvBlock(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -346,10 +347,10 @@ class MixResViT(nn.Module):
         x = x + pos_embed
 
         x = self.layers(x)
-
+        orig_dtype = x.dtype
         outs = {}
         out_name = self._out_features[0]
-        outs[out_name] = self.norm_out(x)
+        outs[out_name] = self.norm_out(x.float()).to(orig_dtype)
         outs[out_name + "_pos"] = pos[:,:,1:]  # torch.div(pos_scale, 2 ** (self.n_scales - s - 1), rounding_mode='trunc')
         outs[out_name + "_spatial_shape"] = patched_im_size
         outs[out_name + "_scale"] = pos[:, :, 0]

@@ -245,9 +245,9 @@ class ClusterTransformerBlock(nn.Module):
 
         b, n, c = feat.shape
         assert c == self.dim, "dim does not accord to input"
-
+        orig_dtype = feat.dtype
         shortcut = feat
-        feat = self.norm1(feat)
+        feat = self.norm1(feat.float())
 
         # cluster attention
         feat = self.attn(feat=feat,
@@ -259,14 +259,14 @@ class ClusterTransformerBlock(nn.Module):
         # FFN
         if not self.layer_scale:
             feat = shortcut + self.drop_path(feat)
-            feat_mlp = self.mlp(self.norm2(feat))
+            feat_mlp = self.mlp(self.norm2(feat.float()))
             feat = feat + self.drop_path(feat_mlp)
         else:
             feat = shortcut + self.drop_path(self.gamma1 * feat)
-            feat_mlp = self.mlp(self.norm2(feat))
+            feat_mlp = self.mlp(self.norm2(feat.float()))
             feat = feat + self.drop_path(self.gamma2 * feat_mlp)
 
-        return feat
+        return feat.to(orig_dtype)
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}, num_heads={self.num_heads}, " \
@@ -616,7 +616,7 @@ class MixResNeighbour(nn.Module):
     def split_features(self, tokens_to_split):
         x_splitted = self.split(tokens_to_split)
         x_splitted = rearrange(x_splitted, 'b n (s d) -> b n s d', s=self.split_ratio).contiguous()
-        x_splitted = x_splitted + self.rel_pos_emb + self.scale_emb
+        x_splitted = x_splitted + 0.1*self.rel_pos_emb + 0.1*self.scale_emb
         x_splitted = rearrange(x_splitted, 'b n s d -> b (n s) d', s=self.split_ratio).contiguous()
         return x_splitted
 
@@ -729,8 +729,8 @@ class MixResNeighbour(nn.Module):
         if self.keep_old_scale:
             all_feat.append(feat_to_split)
             all_pos.append(pos_to_split)
-            upsampled_feat = self.split_features(feat_to_split.detach().clone())
-            upsampled_pos = self.split_pos(pos_to_split.detach().clone(), scale)
+            upsampled_feat = self.split_features(feat_to_split.clone())
+            upsampled_pos = self.split_pos(pos_to_split.clone(), scale)
 
             if self.add_image_data_to_all:
                 all_feat.append(upsampled_feat)
@@ -783,7 +783,8 @@ class MixResNeighbour(nn.Module):
             pos_scale = rearrange(pos_scale, '(b n) p -> b n p', b=B).contiguous()
             out_scale = x[b_scale_idx, n_scale_idx, :]
             out_scale = rearrange(out_scale, '(b n) c -> b n c', b=B).contiguous()
-            outs["res{}".format(out_idx)] = self.norm_out(out_scale)
+            orig_dtype = out_scale.dtype
+            outs["res{}".format(out_idx)] = self.norm_out(out_scale.float()).to(orig_dtype)
             outs["res{}_pos".format(out_idx)] = pos_scale[:,:,1:]
             outs["res{}_scale".format(out_idx)] = pos_scale[:, :, 0]
             outs["res{}_spatial_shape".format(out_idx)] = patched_im_size

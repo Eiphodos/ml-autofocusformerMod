@@ -57,6 +57,7 @@ class OracleTeacherBackbone(nn.Module):
             nn.init.xavier_uniform_(out_projs[-1][0].weight, gain=1)
             nn.init.constant_(out_projs[-1][0].bias, 0)
         self.out_proj = nn.ModuleList(out_projs)
+        self.out_norm = nn.LayerNorm(out_dim)
 
         print("Successfully built OracleTeacherBackbone model!")
 
@@ -92,7 +93,8 @@ class OracleTeacherBackbone(nn.Module):
                     feat_pos = feat_pos[b_, pos_indices]
                     feat_scale = feat_scale[b_, pos_indices]
                     assert (outs[f + '_pos'] == feat_pos).all()
-                    outs[f] = outs[f] + self.feat_proj[scale][curr_scale](feat)
+                    orig_dtype = feat.dtype
+                    outs[f] = outs[f] + self.out_norm(self.feat_proj[scale][curr_scale](feat).float()).to(orig_dtype)
                 else:
                     outs[f] = feat
                     outs[f + '_pos'] = feat_pos
