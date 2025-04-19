@@ -235,6 +235,17 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
             outputs = model(samples)
 
+        for name, param in model.named_parameters():
+            if torch.isnan(param.grad).any():
+                logger.info(f'NaN in gradients at {name}')
+            if torch.isinf(param.grad).any():
+                logger.info(f'Inf in gradients at {name}')
+
+        if torch.isnan(outputs).any():
+            logger.info("NaN output detected")
+        if torch.isinf(outputs).any():
+            logger.info("Inf output detected")
+
         if config.TRAIN.ACCUMULATION_STEPS <= 1:
             ACCUMULATION_STEPS = 1
         else:
@@ -264,7 +275,9 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         batch_time.update(time.time() - end)
         end = time.time()
         if get_rank() == 0:
-            wandb_logger.log({"train/loss": loss_meter.val})
+            wandb_logger.log({"train/loss": loss_meter.val,
+                              "train/grad_norm": norm_meter.val,
+                              "train/loss_scale": scaler_meter.val})
 
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
             lr = optimizer.param_groups[0]['lr']
