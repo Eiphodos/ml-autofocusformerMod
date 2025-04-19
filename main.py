@@ -234,18 +234,6 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         targets = targets.cuda()
         with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
             outputs = model(samples)
-
-        for name, param in model.named_parameters():
-            if torch.isnan(param.grad).any():
-                logger.info(f'NaN in gradients at {name}')
-            if torch.isinf(param.grad).any():
-                logger.info(f'Inf in gradients at {name}')
-
-        if torch.isnan(outputs).any():
-            logger.info("NaN output detected")
-        if torch.isinf(outputs).any():
-            logger.info("Inf output detected")
-
         if config.TRAIN.ACCUMULATION_STEPS <= 1:
             ACCUMULATION_STEPS = 1
         else:
@@ -261,6 +249,16 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
             lr_scheduler.step_update((epoch * num_steps + idx) // ACCUMULATION_STEPS)
             if model_ema is not None:
                 model_ema.update(model)
+            for name, param in model.named_parameters():
+                if torch.isnan(param.grad).any():
+                    logger.info(f'NaN in gradients at {name}')
+                if torch.isinf(param.grad).any():
+                    logger.info(f'Inf in gradients at {name}')
+
+            if torch.isnan(outputs).any():
+                logger.info("NaN output detected")
+            if torch.isinf(outputs).any():
+                logger.info("Inf output detected")
         if loss_scaler.is_enabled():
             loss_scale_value = loss_scaler.state_dict()["scale"]
         else:
