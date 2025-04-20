@@ -180,7 +180,8 @@ def main(config, logger):
                 wandb_logger.log({
                     "val/acc1": acc1,
                     "val/acc5": acc5,
-                    "val/loss": loss
+                    "val/loss": loss,
+                    "val/epoch": epoch
                 })
             logger.info(f"Accuracy of the network: {acc1:.1f}%")
             max_accuracy = max(max_accuracy, acc1)
@@ -232,7 +233,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
             samples, targets = mixup_fn(samples, targets)
         samples = samples.cuda()
         targets = targets.cuda()
-        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
+        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE, dtype=torch.bfloat16):
             outputs = model(samples)
         if config.TRAIN.ACCUMULATION_STEPS <= 1:
             ACCUMULATION_STEPS = 1
@@ -272,15 +273,15 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         scaler_meter.update(loss_scale_value)
         batch_time.update(time.time() - end)
         end = time.time()
-        if get_rank() == 0:
-            wandb_logger.log({"train/loss": loss_meter.val,
-                              "train/grad_norm": norm_meter.val,
-                              "train/loss_scale": scaler_meter.val})
 
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
             lr = optimizer.param_groups[0]['lr']
             memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
             etas = batch_time.avg * (num_steps - idx)
+            if get_rank() == 0:
+                wandb_logger.log({"train/loss": loss_meter.val,
+                                  "train/grad_norm": norm_meter.val,
+                                  "train/loss_scale": scaler_meter.val})
             logger.info(
                 f'Train: [{epoch}/{total_epochs}][{idx}/{num_steps}]\t'
                 f'eta {datetime.timedelta(seconds=int(etas))} lr {lr:.6f}\t'
