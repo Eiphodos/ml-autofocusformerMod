@@ -233,7 +233,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
             samples, targets = mixup_fn(samples, targets)
         samples = samples.cuda()
         targets = targets.cuda()
-        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE, dtype=torch.bfloat16):
+        with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
             outputs = model(samples)
         if config.TRAIN.ACCUMULATION_STEPS <= 1:
             ACCUMULATION_STEPS = 1

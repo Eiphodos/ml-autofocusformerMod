@@ -142,7 +142,7 @@ class ClusterAttention(nn.Module):
             q = q.reshape(b, n, h, -1).permute(0, 2, 1, 3)
             kv = kv.view(b, n, h, 2, c_).permute(3, 0, 2, 1, 4)  # 2 x b x h x n x c_
             key, v = kv[0], kv[1]
-            attn = CLUSTENQKFunction.apply(q, key, member_idx)  # b x h x n x m
+            attn = CLUSTENQKFunction.apply(q.float(), key.float(), member_idx.float())  # b x h x n x m
             mask = cluster_mask
             if mask is not None:
                 mask = mask.reshape(b, 1, n, m)
@@ -182,7 +182,7 @@ class ClusterAttention(nn.Module):
             feat = (attn @ v).permute(0, 2, 1, 3).reshape(b, n, c)
             feat = feat + blank_v.permute(0, 2, 1, 3).reshape(b, n, c)
         else:
-            feat = CLUSTENAVFunction.apply(attn, v, member_idx).permute(0, 2, 1, 3).reshape(b, n, c)
+            feat = CLUSTENAVFunction.apply(attn.float(), v.float(), member_idx.float()).permute(0, 2, 1, 3).reshape(b, n, c)
             feat = feat + blank_v.permute(0, 2, 1, 3).reshape(b, n, c)
 
         feat = self.proj(feat)
