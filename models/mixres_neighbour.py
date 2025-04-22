@@ -590,42 +590,34 @@ class MixResNeighbour(nn.Module):
 
         return tokens_to_split, coords_to_split, tokens_to_keep, coords_to_keep
 
-    def differentiable_topk_split(self, x, scores, k):
-        # x: [B, N, C]
-        # scores: [B, N]
-
-        topk_scores, topk_idx = torch.topk(scores, k=k, dim=1)
-
-        # Create hard mask
-        mask_hard = torch.zeros_like(scores).scatter(1, topk_idx, 1.0)
-
-        # STE - allow gradient flow
-        mask = mask_hard + (mask_hard - mask_hard.detach())
-
-        # Inject gradient path to scores
-        # This ensures scores receive gradient even if topk is not differentiable
-        _ = (x * mask.unsqueeze(-1)).sum() * 0.0
-
-        # Gather the actual hard selection for forward pass
-        x_selected = torch.gather(x, 1, topk_idx.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
-
-        return x_selected, topk_idx
-
     def divide_tokens_to_split_and_keep(self, feat_at_curr_scale, pos_at_curr_scale, importance_scores):
         B, N, C = feat_at_curr_scale.shape
         k_split = int(N * self.upscale_ratio)
         k_keep = int(N - k_split)
 
-        # Top-k for split tokens (important)
-        tokens_to_split, tki = self.differentiable_topk_split(feat_at_curr_scale, importance_scores, k_split)
-        coords_to_split = torch.gather(pos_at_curr_scale, 1, tki.unsqueeze(-1).expand(-1, -1, 3))
+        soft_scores = torch.softmax(importance_scores, dim=1)
 
-        # Bottom-k for keep tokens (less important)
-        # Use negative scores to reverse top-k
-        tokens_to_keep, bki = self.differentiable_topk_split(feat_at_curr_scale, -importance_scores, k_keep)
-        coords_to_keep = torch.gather(pos_at_curr_scale, 1, bki.unsqueeze(-1).expand(-1, -1, 3))
+        _, topk_idx = torch.topk(importance_scores, k=k_split, dim=1)
+        _, bottomk_idx = torch.topk(importance_scores, k=k_keep, dim=1, largest=False)
 
-        return tokens_to_split, coords_to_split, tokens_to_keep, coords_to_keep
+        mask_split_hard = torch.zeros_like(importance_scores).scatter(1, topk_idx, 1.0)
+        mask_keep_hard = torch.zeros_like(importance_scores).scatter(1, bottomk_idx, 1.0)
+
+        mask_split = mask_split_hard + (soft_scores - soft_scores.detach())
+        mask_keep = mask_keep_hard + ((1.0 - soft_scores) - (1.0 - soft_scores).detach())
+
+        tokens_masked_split = feat_at_curr_scale * mask_split.unsqueeze(-1)
+        tokens_masked_keep = feat_at_curr_scale * mask_keep.unsqueeze(-1)
+
+        batch_idx = torch.arange(B, device=feat_at_curr_scale.device).unsqueeze(1)
+
+        tokens_to_split = tokens_masked_split[batch_idx, topk_idx]
+        tokens_to_keep = tokens_masked_keep[batch_idx, bottomk_idx]
+
+        pos_to_split = pos_at_curr_scale[batch_idx, topk_idx]  # no grad needed
+        pos_to_keep = pos_at_curr_scale[batch_idx, bottomk_idx]
+
+        return tokens_to_split, pos_to_split, tokens_to_keep, pos_to_keep
 
     def divide_feat_pos_on_scale(self, tokens, patches_scale_coords, curr_scale, upsampling_mask):
         B, N, _ = tokens.shape
