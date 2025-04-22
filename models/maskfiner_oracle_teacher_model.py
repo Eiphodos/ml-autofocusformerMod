@@ -65,11 +65,16 @@ class OracleTeacherBackbone(nn.Module):
             nn.init.constant_(out_projs[-1][0].bias, 0)
         self.out_proj = nn.ModuleList(out_projs)
 
+        '''
         upsamplers = []
         for i in range(len(self.backbones) - 1):
             upsample_out = MLP(backbone_dims[i], backbone_dims[i], 1, num_layers=3)
             upsamplers.append(upsample_out)
         self.upsamplers = nn.ModuleList(upsamplers)
+        '''
+
+        self.gate = MLP(out_dim, out_dim, num_layers=3)
+
 
 
         print("Successfully built OracleTeacherBackbone model!")
@@ -124,8 +129,8 @@ class OracleTeacherBackbone(nn.Module):
 
             if scale < len(self.backbones) - 1:
                 #B, N, C = all_feat[0].shape
-                #upsampling_mask = self.generate_random_upsampling_mask(B, N)
-                upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
+                upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                #upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
 
             #print("Upsampling mask for scale {}: pred: {}, oracle: {}".format(scale, upsampling_mask_pred.shape, upsampling_mask_oracle.shape))
 
@@ -140,9 +145,9 @@ class OracleTeacherBackbone(nn.Module):
             feat = self.out_proj[i](outs[f])
             out_feats.append(feat)
         out_feats = torch.cat(out_feats, dim=1)
-
-        out_feats = out_feats.mean(1)
-        out = self.head(out_feats)
+        gated = torch.sigmoid(self.gate(out_feats.mean(1)))
+        pooled = (out_feats * gated.unsqueeze(1)).sum(dim=1)
+        out = self.head(pooled)
 
         return out
 
