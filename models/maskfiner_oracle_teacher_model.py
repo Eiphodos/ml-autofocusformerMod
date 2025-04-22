@@ -65,6 +65,12 @@ class OracleTeacherBackbone(nn.Module):
             nn.init.constant_(out_projs[-1][0].bias, 0)
         self.out_proj = nn.ModuleList(out_projs)
 
+        upsamplers = []
+        for i in range(len(self.backbones) - 1):
+            upsample_out = MLP(backbone_dims[i], backbone_dims[i], 1, num_layers=3)
+            upsamplers.append(upsample_out)
+        self.upsamplers = nn.ModuleList(upsamplers)
+
 
         print("Successfully built OracleTeacherBackbone model!")
 
@@ -114,8 +120,9 @@ class OracleTeacherBackbone(nn.Module):
                 all_ss.append(feat_ss)
 
             if scale < len(self.backbones) - 1:
-                B, N, C = all_feat[0].shape
-                upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                #B, N, C = all_feat[0].shape
+                #upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
 
             #print("Upsampling mask for scale {}: pred: {}, oracle: {}".format(scale, upsampling_mask_pred.shape, upsampling_mask_oracle.shape))
 
