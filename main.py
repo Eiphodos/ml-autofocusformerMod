@@ -251,11 +251,14 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
             if model_ema is not None:
                 model_ema.update(model)
             for name, param in model.named_parameters():
+                if param.grad is None:
+                    logger.info(f'Gradient for {name} is None, flow is interrupted!')
                 if torch.isnan(param.grad).any():
                     logger.info(f'NaN in gradients at {name}')
                 if torch.isinf(param.grad).any():
                     logger.info(f'Inf in gradients at {name}')
-
+            if outputs is None:
+                logger.info(f'Outputs are None, something went very wrong!')
             if torch.isnan(outputs).any():
                 logger.info("NaN output detected")
             if torch.isinf(outputs).any():
