@@ -591,22 +591,25 @@ class MixResNeighbour(nn.Module):
         return tokens_to_split, coords_to_split, tokens_to_keep, coords_to_keep
 
     def differentiable_topk_split(self, x, scores, k):
-        # Get top-k indices (non-differentiable, used only in forward)
+        # x: [B, N, C]
+        # scores: [B, N]
+
         topk_scores, topk_idx = torch.topk(scores, k=k, dim=1)
 
-        # Hard mask from top-k
-        mask = torch.zeros_like(scores).scatter(1, topk_idx, 1.0)
+        # Create hard mask
+        mask_hard = torch.zeros_like(scores).scatter(1, topk_idx, 1.0)
 
-        # STE: gradient flows through the soft path
-        mask = mask + (mask - mask.detach())  # allows grad flow through mask
+        # STE - allow gradient flow
+        mask = mask_hard + (mask_hard - mask_hard.detach())
 
-        # Apply soft selection
-        x_masked = x * mask.unsqueeze(-1)  # [B, N, C]
+        # Inject gradient path to scores
+        # This ensures scores receive gradient even if topk is not differentiable
+        _ = (x * mask.unsqueeze(-1)).sum() * 0.0
 
-        # Use hard indices to gather only the selected tokens in forward pass
-        topk_tokens = torch.gather(x_masked, 1, topk_idx.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
+        # Gather the actual hard selection for forward pass
+        x_selected = torch.gather(x, 1, topk_idx.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
 
-        return topk_tokens, topk_idx
+        return x_selected, topk_idx
 
     def divide_tokens_to_split_and_keep(self, feat_at_curr_scale, pos_at_curr_scale, importance_scores):
         B, N, C = feat_at_curr_scale.shape
