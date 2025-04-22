@@ -614,7 +614,7 @@ class MixResNeighbour(nn.Module):
         tokens_to_split = tokens_masked_split[batch_idx, topk_idx]
         tokens_to_keep = tokens_masked_keep[batch_idx, bottomk_idx]
 
-        pos_to_split = pos_at_curr_scale[batch_idx, topk_idx]  # no grad needed
+        pos_to_split = pos_at_curr_scale[batch_idx, topk_idx]
         pos_to_keep = pos_at_curr_scale[batch_idx, bottomk_idx]
 
         return tokens_to_split, pos_to_split, tokens_to_keep, pos_to_keep

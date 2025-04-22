@@ -101,10 +101,13 @@ class OracleTeacherBackbone(nn.Module):
 
                 if f + '_pos' in outs:
                     pos_indices = self.find_pos_org_order(outs[f + '_pos'], feat_pos)
+                    print("Shuffled pos: {}".format(feat_pos[0, 0:10, :]))
                     b_ = torch.arange(B).unsqueeze(-1).expand(-1, N)
                     feat = feat[b_, pos_indices]
                     feat_pos = feat_pos[b_, pos_indices]
                     feat_scale = feat_scale[b_, pos_indices]
+                    print("Original pos: {}".format(outs[f + '_pos'][0,0:10,:]))
+                    print("Ordered pos: {}".format(feat_pos[0, 0:10, :]))
                     assert (outs[f + '_pos'] == feat_pos).all()
                     orig_dtype = feat.dtype
                     outs[f] = outs[f] + self.feat_norm[scale][curr_scale](self.feat_proj[scale][curr_scale](feat).float()).to(orig_dtype)
