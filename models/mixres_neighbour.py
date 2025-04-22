@@ -729,8 +729,8 @@ class MixResNeighbour(nn.Module):
         if self.keep_old_scale:
             all_feat.append(feat_to_split)
             all_pos.append(pos_to_split)
-            upsampled_feat = self.split_features(feat_to_split.detach().clone())
-            upsampled_pos = self.split_pos(pos_to_split.detach().clone(), scale)
+            upsampled_feat = self.split_features(feat_to_split.clone())
+            upsampled_pos = self.split_pos(pos_to_split.clone(), scale)
 
             if self.add_image_data_to_all:
                 all_feat.append(upsampled_feat)
