@@ -571,11 +571,8 @@ class MixResNeighbour(nn.Module):
     def divide_tokens_to_split_and_keep_old(self, feat_at_curr_scale, pos_at_curr_scale, upsampling_mask):
         B, N, C = feat_at_curr_scale.shape
         k_split = int(feat_at_curr_scale.shape[1] * self.upscale_ratio)
-        k_bottom = 0 #k_split // 2
-        k_top = k_split #- k_bottom
-        k_keep = int(feat_at_curr_scale.shape[1] - k_split)
-
-        topk_scores, topk_indices = torch.topk(upsampling_mask, k=k_top, dim=1)
+        k_bottom = 0
+        k_top = k_split
 
         sorted_scores, sorted_indices = torch.sort(upsampling_mask, dim=1, descending=False)
 

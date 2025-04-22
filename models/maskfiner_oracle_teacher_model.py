@@ -129,7 +129,7 @@ class OracleTeacherBackbone(nn.Module):
                 all_ss.append(feat_ss)
 
             if scale < len(self.backbones) - 1:
-                #B, N, C = all_feat[0].shape
+                B, N, C = all_feat[0].shape
                 upsampling_mask = self.generate_random_upsampling_mask(B, N)
                 #upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
 
