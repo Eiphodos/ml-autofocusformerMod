@@ -140,14 +140,14 @@ class OracleTeacherBackbone(nn.Module):
             features = torch.cat(all_feat, dim=1)
         outs['min_spatial_shape'] = output['min_spatial_shape']
 
-        out_feats = []
+        out_scale_vectors = []
         for i, f in enumerate(all_out_features[::-1]):
             feat = self.out_proj[i](outs[f])
-            out_feats.append(feat)
-        out_feats = torch.cat(out_feats, dim=1)
-        gated = torch.sigmoid(self.gate(out_feats.mean(1)))
-        pooled = (out_feats * gated.unsqueeze(1)).sum(dim=1)
-        out = self.head(pooled)
+            pooled = feat.mean(1)
+            out_scale_vectors.append(pooled)
+        out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
+        flat_out = out_scale_vectors.flatten(1)
+        out = self.head(flat_out)
 
         return out
 
