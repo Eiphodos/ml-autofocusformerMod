@@ -8,7 +8,7 @@ from einops import rearrange
 import torch
 from torch import nn
 import torch.nn.functional as F
-
+from timm.models.layers import trunc_normal_
 
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
@@ -55,6 +55,7 @@ class OracleTeacherBackbone(nn.Module):
 
         #self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+        self.head_norm = nn.LayerNorm(sum(self.backbone_dims))
         self.head = MLP(sum(self.backbone_dims), sum(self.backbone_dims) // 2, num_classes, num_layers=3)
 
         '''
@@ -76,10 +77,17 @@ class OracleTeacherBackbone(nn.Module):
         self.upsamplers = nn.ModuleList(upsamplers)
         '''
 
-
+        self.apply(self._init_weights)
 
         print("Successfully built OracleTeacherBackbone model!")
-
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
 
     def forward(self, im):
         upsampling_mask = None
@@ -144,6 +152,7 @@ class OracleTeacherBackbone(nn.Module):
             pooled = feat.mean(1)
             out_scale_vectors.append(pooled)
         out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
+        out_scale_vectors = self.head_norm(out_scale_vectors)
         out = self.head(out_scale_vectors)
 
         return out
