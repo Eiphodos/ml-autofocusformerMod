@@ -135,7 +135,8 @@ class OracleTeacherBackbone(nn.Module):
 
             if scale < len(self.backbones) - 1:
                 B, N, C = all_feat[0].shape
-                upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                #upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                upsampling_mask = self.generate_max_norm_upsampling_mask(all_feat[0])
                 #upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
 
             #print("Upsampling mask for scale {}: pred: {}, oracle: {}".format(scale, upsampling_mask_pred.shape, upsampling_mask_oracle.shape))
@@ -166,3 +167,7 @@ class OracleTeacherBackbone(nn.Module):
         pos_indices = torch.argmin(dists, dim=2)  # (B, N_)
 
         return pos_indices
+
+    def generate_max_norm_upsampling_mask(self, features):
+        upsampling_mask = features.norm(dim=2)
+        return upsampling_mask
