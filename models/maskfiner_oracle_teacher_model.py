@@ -55,9 +55,14 @@ class OracleTeacherBackbone(nn.Module):
         self.feat_norm = nn.ModuleList(feat_norms)
         '''
         #self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
-        tot_out_dim = sum([sum(self.backbone_dims[i:]) for i in range(self.n_scales)])
+        head_projs = []
+        for i in range(self.n_scales):
+            head_proj = nn.Linear(sum(self.backbone_dims[i:]), self.backbone_dims[0] // 2)
+            head_projs.append(head_proj)
+        self.head_projs = nn.ModuleList(head_projs)
+        tot_out_dim = self.n_scales * (self.backbone_dims[0] // 2) #sum([sum(self.backbone_dims[i:]) for i in range(self.n_scales)])
         self.head_norm = nn.LayerNorm(tot_out_dim)
-        self.head = MLP(tot_out_dim, tot_out_dim // 4, num_classes, num_layers=3)
+        self.head = MLP(tot_out_dim, tot_out_dim // 2, num_classes, num_layers=3)
 
         '''
         out_projs = []
@@ -150,7 +155,8 @@ class OracleTeacherBackbone(nn.Module):
         for i, f in enumerate(all_out_features[::-1]):
             feat = outs[f]
             pooled = feat.mean(1)
-            out_scale_vectors.append(pooled)
+            projed = self.head_projs[i](pooled)
+            out_scale_vectors.append(projed)
         out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
         out_scale_vectors = self.head_norm(out_scale_vectors)
         out = self.head(out_scale_vectors)
