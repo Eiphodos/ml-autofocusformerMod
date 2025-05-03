@@ -36,6 +36,7 @@ class OracleTeacherBackbone(nn.Module):
         self.n_scales = n_scales
         self.num_classes = num_classes
 
+        '''
         feat_projs = []
         feat_norms = []
         for i in range(len(self.backbones)):
@@ -52,11 +53,11 @@ class OracleTeacherBackbone(nn.Module):
             feat_norms.append(scale_norms)
         self.feat_proj = nn.ModuleList(feat_projs)
         self.feat_norm = nn.ModuleList(feat_norms)
-
+        '''
         #self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
-
-        self.head_norm = nn.LayerNorm(sum(self.backbone_dims))
-        self.head = MLP(sum(self.backbone_dims), sum(self.backbone_dims) // 2, num_classes, num_layers=3)
+        tot_out_dim = sum([sum(self.backbone_dims[i:]) for i in range(self.n_scales)])
+        self.head_norm = nn.LayerNorm(tot_out_dim)
+        self.head = MLP(tot_out_dim, tot_out_dim // 4, num_classes, num_layers=3)
 
         '''
         out_projs = []
@@ -80,6 +81,7 @@ class OracleTeacherBackbone(nn.Module):
         self.apply(self._init_weights)
 
         print("Successfully built OracleTeacherBackbone model!")
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
@@ -112,7 +114,6 @@ class OracleTeacherBackbone(nn.Module):
 
                 #print("Output {} for scale {}: feat_shape: {}, pos_shape: {}, scale_shape: {}, spatial_shape: {}".format(f, scale, feat.shape, feat_pos.shape, feat_scale.shape, feat_ss))
 
-
                 if f + '_pos' in outs:
                     pos_indices = self.find_pos_org_order(outs[f + '_pos'], feat_pos)
                     b_ = torch.arange(B).unsqueeze(-1).expand(-1, N)
@@ -120,8 +121,7 @@ class OracleTeacherBackbone(nn.Module):
                     feat_pos = feat_pos[b_, pos_indices]
                     feat_scale = feat_scale[b_, pos_indices]
                     assert (outs[f + '_pos'] == feat_pos).all()
-                    orig_dtype = feat.dtype
-                    outs[f] = outs[f] + self.feat_norm[scale][curr_scale](self.feat_proj[scale][curr_scale](feat).float()).to(orig_dtype)
+                    outs[f] = torch.cat([outs[f], feat], dim=2)
                 else:
                     outs[f] = feat
                     outs[f + '_pos'] = feat_pos
@@ -166,3 +166,7 @@ class OracleTeacherBackbone(nn.Module):
         pos_indices = torch.argmin(dists, dim=2)  # (B, N_)
 
         return pos_indices
+
+    def generate_max_norm_upsampling_mask(self, features):
+        upsampling_mask = features.norm(dim=2)
+        return upsampling_mask
