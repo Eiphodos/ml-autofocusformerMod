@@ -57,10 +57,10 @@ class OracleTeacherBackbone(nn.Module):
         #self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
         head_projs = []
         for i in range(self.n_scales):
-            head_proj = nn.Linear(sum(self.backbone_dims[i:]), self.backbone_dims[0] // 2)
+            head_proj = nn.Linear(sum(self.backbone_dims[i:]), self.backbone_dims[0])
             head_projs.append(head_proj)
         self.head_projs = nn.ModuleList(head_projs)
-        tot_out_dim = self.n_scales * (self.backbone_dims[0] // 2) #sum([sum(self.backbone_dims[i:]) for i in range(self.n_scales)])
+        tot_out_dim = self.n_scales * (self.backbone_dims[0]) #sum([sum(self.backbone_dims[i:]) for i in range(self.n_scales)])
         self.head_norm = nn.LayerNorm(tot_out_dim)
         self.head = MLP(tot_out_dim, tot_out_dim // 2, num_classes, num_layers=3)
 
