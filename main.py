@@ -228,6 +228,12 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
     start = time.time()
     end = time.time()
 
+    for i, u in enumerate(model.module.final_upsampling_ratios):
+        up_ratio = model.module.final_upsampling_ratios[i]
+        new_up = get_upsample_ratio(up_ratio, total_epochs, epoch)
+        model.module.backbones[i].upscale_ratio = new_up
+        logger.info("Upsampling ratio for backbone {} is now {}".format(i, new_up))
+
     for idx, (samples, targets) in enumerate(data_loader):
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
@@ -276,12 +282,6 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         scaler_meter.update(loss_scale_value)
         batch_time.update(time.time() - end)
         end = time.time()
-
-        for i, u in enumerate(model.module.final_upsampling_ratios):
-            up_ratio = model.module.final_upsampling_ratios[i]
-            new_up = get_upsample_ratio(up_ratio, total_epochs, epoch)
-            model.module.backbones[i].upscale_ratio = new_up
-            logger.info("Upsampling ratio for backbone {} is now {}".format(i, new_up))
 
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
             lr = optimizer.param_groups[0]['lr']
