@@ -36,24 +36,6 @@ class OracleTeacherBackbone(nn.Module):
         self.n_scales = n_scales
         self.num_classes = num_classes
 
-        '''
-        feat_projs = []
-        feat_norms = []
-        for i in range(len(self.backbones)):
-            scale_projs = []
-            scale_norms = []
-            for j in range(len(self.backbones[i]._out_features) - 1):
-                f_proj = nn.Linear(backbone_dims[i], backbone_dims[j])
-                f_norm = nn.LayerNorm(backbone_dims[j])
-                scale_projs.append(f_proj)
-                scale_norms.append(f_norm)
-            scale_projs = nn.ModuleList(scale_projs)
-            scale_norms = nn.ModuleList(scale_norms)
-            feat_projs.append(scale_projs)
-            feat_norms.append(scale_norms)
-        self.feat_proj = nn.ModuleList(feat_projs)
-        self.feat_norm = nn.ModuleList(feat_norms)
-        '''
         #self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
         head_projs = []
         d_out = []
@@ -66,27 +48,8 @@ class OracleTeacherBackbone(nn.Module):
         self.head_projs = nn.ModuleList(head_projs)
         tot_out_dim = sum(d_out)
         self.head_norm = nn.LayerNorm(tot_out_dim)
-        #self.head = MLP(tot_out_dim, tot_out_dim // 2, num_classes, num_layers=3)
-        self.head = nn.Linear(tot_out_dim, num_classes)
-
-        '''
-        out_projs = []
-        for dim in backbone_dims:
-            out_projs.append(nn.Sequential(
-                        nn.Linear(dim, out_dim, bias=True),
-                        nn.LayerNorm(out_dim)
-                    ))
-            nn.init.xavier_uniform_(out_projs[-1][0].weight, gain=1)
-            nn.init.constant_(out_projs[-1][0].bias, 0)
-        self.out_proj = nn.ModuleList(out_projs)
-        '''
-        '''
-        upsamplers = []
-        for i in range(len(self.backbones) - 1):
-            upsample_out = MLP(backbone_dims[i], backbone_dims[i], 1, num_layers=3)
-            upsamplers.append(upsample_out)
-        self.upsamplers = nn.ModuleList(upsamplers)
-        '''
+        self.head = MLP(tot_out_dim, tot_out_dim // 2, num_classes, num_layers=3)
+        #self.head = nn.Linear(tot_out_dim, num_classes)
 
         self.apply(self._init_weights)
 
