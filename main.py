@@ -277,6 +277,12 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         batch_time.update(time.time() - end)
         end = time.time()
 
+        for i, u in enumerate(model.final_upsampling_ratios):
+            up_ratio = model.final_upsampling_ratios[i]
+            new_up = get_upsample_ratio(up_ratio, total_epochs, epoch)
+            model.backbones[i].upscale_ratio = new_up
+            logger.info("Upsampling ratio for backbone {} is now {}".format(i, new_up))
+
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
             lr = optimizer.param_groups[0]['lr']
             memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
@@ -439,6 +445,13 @@ def run_all(config):
     with tempfile.TemporaryDirectory() as dirname:
         pykeops.set_build_folder(dirname)
         main(config, logger)
+
+
+def get_upsample_ratio(upsample_ratio, n_epochs, curr_epoch):
+    start_ratio = 1.0
+    end_ratio = upsample_ratio
+    progress = curr_epoch / n_epochs
+    return start_ratio + (end_ratio - start_ratio) * progress
 
 
 if __name__ == "__main__":

@@ -29,6 +29,10 @@ class OracleTeacherBackbone(nn.Module):
     def __init__(self, backbones, backbone_dims, out_dim, all_out_features, n_scales, num_classes):
         super().__init__()
         self.backbones = nn.ModuleList(backbones)
+        final_upsampling_ratios = []
+        for b in self.backbones:
+            final_upsampling_ratios.append(b.upscale_ratio)
+        self.final_upsampling_ratios = final_upsampling_ratios
         self.out_dim = out_dim
         self.backbone_dims = backbone_dims
         self.all_out_features = all_out_features
