@@ -277,7 +277,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         batch_time.update(time.time() - end)
         end = time.time()
 
-        for i, u in enumerate(model.final_upsampling_ratios):
+        for i, u in enumerate(model.module.final_upsampling_ratios):
             up_ratio = model.module.final_upsampling_ratios[i]
             new_up = get_upsample_ratio(up_ratio, total_epochs, epoch)
             model.module.backbones[i].upscale_ratio = new_up
