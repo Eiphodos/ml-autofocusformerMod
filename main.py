@@ -278,9 +278,9 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         end = time.time()
 
         for i, u in enumerate(model.final_upsampling_ratios):
-            up_ratio = model.final_upsampling_ratios[i]
+            up_ratio = model.module.final_upsampling_ratios[i]
             new_up = get_upsample_ratio(up_ratio, total_epochs, epoch)
-            model.backbones[i].upscale_ratio = new_up
+            model.module.backbones[i].upscale_ratio = new_up
             logger.info("Upsampling ratio for backbone {} is now {}".format(i, new_up))
 
         if idx % (config.PRINT_FREQ * ACCUMULATION_STEPS) == 0:
