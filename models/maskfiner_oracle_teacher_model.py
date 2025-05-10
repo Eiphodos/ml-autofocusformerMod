@@ -41,6 +41,7 @@ class OracleTeacherBackbone(nn.Module):
         self.num_classes = num_classes
 
         #self.head = nn.Linear(out_dim, num_classes) if num_classes > 0 else nn.Identity()
+        '''
         head_projs = []
         d_out = []
         for i in range(self.n_scales):
@@ -50,9 +51,10 @@ class OracleTeacherBackbone(nn.Module):
             head_projs.append(head_proj)
             d_out.append(do)
         self.head_projs = nn.ModuleList(head_projs)
-        tot_out_dim = sum(d_out)
+        '''
+        tot_out_dim = backbone_dims[-1] * self.n_scales
         self.head_norm = nn.LayerNorm(tot_out_dim)
-        self.head = MLP(tot_out_dim, tot_out_dim // 2, num_classes, num_layers=3)
+        self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
         #self.head = nn.Linear(tot_out_dim, num_classes)
 
         self.apply(self._init_weights)
@@ -90,7 +92,7 @@ class OracleTeacherBackbone(nn.Module):
                 B, N, C = feat.shape
 
                 #print("Output {} for scale {}: feat_shape: {}, pos_shape: {}, scale_shape: {}, spatial_shape: {}".format(f, scale, feat.shape, feat_pos.shape, feat_scale.shape, feat_ss))
-
+                '''
                 if f + '_pos' in outs:
                     pos_indices = self.find_pos_org_order(outs[f + '_pos'], feat_pos)
                     b_ = torch.arange(B).unsqueeze(-1).expand(-1, N)
@@ -100,10 +102,11 @@ class OracleTeacherBackbone(nn.Module):
                     assert (outs[f + '_pos'] == feat_pos).all()
                     outs[f] = torch.cat([outs[f], feat], dim=2)
                 else:
-                    outs[f] = feat
-                    outs[f + '_pos'] = feat_pos
-                    outs[f + '_scale'] = feat_scale
-                    outs[f + '_spatial_shape'] = feat_ss
+                '''
+                outs[f] = feat
+                outs[f + '_pos'] = feat_pos
+                outs[f + '_scale'] = feat_scale
+                outs[f + '_spatial_shape'] = feat_ss
 
                 all_feat.append(feat)
                 all_pos.append(feat_pos)
@@ -127,11 +130,11 @@ class OracleTeacherBackbone(nn.Module):
         for i, f in enumerate(all_out_features[::-1]):
             feat = outs[f]
             pooled = feat.mean(1)
-            projed = self.head_projs[i](pooled)
-            out_scale_vectors.append(projed)
+            #projed = self.head_projs[i](pooled)
+            out_scale_vectors.append(pooled)
         out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
-        out_scale_vectors = nn.functional.gelu(out_scale_vectors)
         out_scale_vectors = self.head_norm(out_scale_vectors)
+        #out_scale_vectors = nn.functional.gelu(out_scale_vectors)
         out = self.head(out_scale_vectors)
 
         return out
