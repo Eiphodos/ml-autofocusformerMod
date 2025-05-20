@@ -8,6 +8,7 @@
 
 from .aff_transformer import AutoFocusFormer
 from .maskfiner_oracle_teacher_model import OracleTeacherBackbone
+from .maskfiner_up_down import UpDownBackbone
 from .mixres_vit import MixResViT
 from .mixres_neighbour import MixResNeighbour
 
@@ -142,7 +143,7 @@ def build_model(config):
             else:
                 raise NotImplementedError(f"Unkown model: {name}")
             all_backbones.append(bb)
-        model = OracleTeacherBackbone(backbones=all_backbones,
+        model = UpDownBackbone(backbones=all_backbones,
                                       backbone_dims=config.MODEL.MR.EMBED_DIM,
                                       out_dim=config.MODEL.MR.OUT_DIM,
                                       all_out_features=config.MODEL.MR.OUT_FEATURES,
