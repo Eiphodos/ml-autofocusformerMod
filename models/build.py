@@ -84,7 +84,7 @@ def build_model(config):
         bb_in_feats = [[None], ["res5"], ["res5", "res4"], ["res5", "res4", "res3"], ["res5", "res4", "res3"],
                        ["res5", "res4"], ["res5"], [None]]
         all_backbones = []
-        n_scales = config.MODEL.MASK_FINER.N_RESOLUTION_SCALES
+        n_scales = config.MODEL.MR.N_RESOLUTION_SCALES
         n_layers = len(config.MODEL.MR.NAME)
         min_patch_size = config.MODEL.MR.PATCH_SIZES[n_scales - 1]
         for layer_index, name in enumerate(config.MODEL.MR.NAME):
