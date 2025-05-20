@@ -189,13 +189,13 @@ class DownSampleConvBlock(nn.Module):
     def __init__(self, in_dim, out_dim):
         super().__init__()
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=2, padding=1)
-        self.b_norm = nn.BatchNorm2d(out_dim)
+        self.g_norm = nn.GroupNorm(1, out_dim)
         self.relu = nn.LeakyReLU()
 
     def forward(self, x):
         x = self.conv(x)
         x = self.relu(x)
-        x = self.b_norm(x)
+        x = self.g_norm(x)
 
         return x
 
@@ -286,17 +286,14 @@ class MixResViT(nn.Module):
             split_ratio=4,
             n_scales=2,
             min_patch_size=4,
-            upscale_ratio=0.5,
+            upscale_ratio=0.0,
+            first_layer=True,
             out_features=['res5']
     ):
         super().__init__()
         self.patch_size = patch_sizes[-1]
         self.patch_sizes = patch_sizes
-        self.patch_embed = OverlapPatchEmbedding(
-            self.patch_size,
-            d_model,
-            channels,
-        )
+
         self.patch_size = self.patch_size
         self.n_layers = n_layers
         self.d_model = d_model
@@ -306,13 +303,26 @@ class MixResViT(nn.Module):
         self.n_scales = n_scales
         self.min_patch_size = min_patch_size
         self.upscale_ratio = upscale_ratio
+        self.first_layer = first_layer
 
         num_features = d_model
         self.num_features = num_features
         self._out_features = out_features
 
-        # Pos Embs
-        self.pe_layer = PositionEmbeddingSine(d_model // 2, normalize=True)
+        if self.first_layer:
+            # Pos Embs
+            self.pe_layer = PositionEmbeddingSine(d_model // 2, normalize=True)
+            self.patch_embed = OverlapPatchEmbedding(
+                self.patch_size,
+                d_model,
+                channels,
+            )
+        else:
+            self.token_norm = nn.LayerNorm(channels)
+            if channels != d_model:
+                self.token_projection = nn.Linear(channels, d_model)
+            else:
+                self.token_projection = nn.Identity()
         dim_ff = int(d_model * mlp_ratio)
         # transformer layers
         self.layers = TransformerLayer(n_layers, d_model, n_heads, dim_ff, dropout, drop_path_rate)
@@ -335,16 +345,27 @@ class MixResViT(nn.Module):
     def forward(self, im, scale, features, features_pos, upsampling_mask):
         B, _, H, W = im.shape
         PS = self.patch_size
-        x = self.patch_embed(im)
         patched_im_size = (H // PS, W // PS)
         min_patched_im_size = (H // self.min_patch_size, W // self.min_patch_size)
 
-        pos = get_2dpos_of_curr_ps_in_min_ps(H, W, PS, self.min_patch_size, scale).to('cuda')
-        pos = pos.repeat(B, 1, 1)
-        #print("Encoder pos max x: {}, max y: {}, and all pos: {}".format(pos[:, :, 0].max(), pos[:, :, 1].max(), pos))
-        #self.test_pos_cover_and_overlap(pos[0], H, W, scale)
-        pos_embed = self.pe_layer(pos[:,:,1:])
-        x = x + pos_embed
+        if self.first_layer:
+            x = self.patch_embed(im)
+            if torch.isnan(x).any():
+                print("NaNs detected in patch-embedded features in ViT in scale {}".format(scale))
+            pos = get_2dpos_of_curr_ps_in_min_ps(H, W, PS, self.min_patch_size, scale).to('cuda')
+            pos = pos.repeat(B, 1, 1)
+            #print("Encoder pos max x: {}, max y: {}, and all pos: {}".format(pos[:, :, 0].max(), pos[:, :, 1].max(), pos))
+            #self.test_pos_cover_and_overlap(pos[0], H, W, scale)
+            pos_embed = self.pe_layer(pos[:,:,1:])
+            x = x + pos_embed
+            if torch.isnan(x).any():
+                print("NaNs detected in pos-embedded features in ViT in scale {}".format(scale))
+        else:
+            features = self.token_norm(features)
+            x = self.token_projection(features)
+            pos = features_pos
+            if torch.isnan(x).any():
+                print("NaNs detected in projected features in ViT in scale {}".format(scale))
 
         x = self.layers(x)
         orig_dtype = x.dtype

@@ -72,7 +72,7 @@ def build_model(config):
                                         upscale_ratio=config.MODEL.MR.UPSCALE_RATIO[layer_index],
                                         out_features= config.MODEL.MR.OUT_FEATURES[-(layer_index+1):])
             else:
-                raise NotImplementedError(f"Unkown model: {model_type}")
+                raise NotImplementedError(f"Unkown model: {m}")
             backbones.append(bb)
         model = OracleTeacherBackbone(backbones=backbones,
                                       backbone_dims=config.MODEL.MR.EMBED_DIM,
@@ -80,6 +80,75 @@ def build_model(config):
                                       all_out_features=config.MODEL.MR.OUT_FEATURES,
                                       n_scales=config.MODEL.MR.N_RESOLUTION_SCALES,
                                       num_classes=config.MODEL.NUM_CLASSES)
+    elif model_type == 'maskfinerUD':
+        bb_in_feats = [[None], ["res5"], ["res5", "res4"], ["res5", "res4", "res3"], ["res5", "res4", "res3"],
+                       ["res5", "res4"], ["res5"], [None]]
+        all_backbones = []
+        n_scales = config.MODEL.MASK_FINER.N_RESOLUTION_SCALES
+        n_layers = len(config.MODEL.MR.NAME)
+        min_patch_size = config.MODEL.MR.PATCH_SIZES[n_scales - 1]
+        for layer_index, name in enumerate(config.MODEL.MR.NAME):
+            if layer_index == 0:
+                first_layer = True
+                in_chans = 3
+            else:
+                first_layer = False
+                in_chans = config.MODEL.MR.EMBED_DIM[layer_index - 1]
+            if layer_index >= n_scales:
+                scale = n_layers - layer_index - 1
+                patch_sizes = config.MODEL.MR.PATCH_SIZES[layer_index:]
+                out_features = config.MODEL.MR.OUT_FEATURES[-(n_layers - layer_index):]
+                in_chans = sum(config.MODEL.MR.EMBED_DIM[-(layer_index + 1):-(n_layers - layer_index)])
+            else:
+                scale = layer_index
+                patch_sizes = config.MODEL.MR.PATCH_SIZES[:layer_index + 1]
+                out_features = config.MODEL.MR.OUT_FEATURES[-(layer_index+1):]
+            if name == 'MixResViT':
+                bb = MixResViT(patch_sizes=patch_sizes,
+                               n_layers=config.MODEL.MR.DEPTHS[layer_index],
+                               d_model=config.MODEL.MR.EMBED_DIM[layer_index],
+                               n_heads=config.MODEL.MR.NUM_HEADS[layer_index],
+                               mlp_ratio=config.MODEL.MR.MLP_RATIO[layer_index],
+                               dropout=config.MODEL.MR.DROP_RATE[layer_index],
+                               drop_path_rate=config.MODEL.MR.DROP_PATH_RATE[layer_index],
+                               split_ratio=config.MODEL.MR.SPLIT_RATIO[layer_index],
+                               channels=in_chans,
+                               n_scales=n_scales,
+                               min_patch_size=min_patch_size,
+                               upscale_ratio=config.MODEL.MR.UPSCALE_RATIO[layer_index],
+                               out_features=out_features,
+                               first_layer=first_layer)
+            elif name == 'MixResNeighbour':
+                bb = MixResNeighbour(patch_sizes=patch_sizes,
+                                     n_layers=config.MODEL.MR.DEPTHS[layer_index],
+                                     d_model=config.MODEL.MR.EMBED_DIM[layer_index],
+                                     n_heads=config.MODEL.MR.NUM_HEADS[layer_index],
+                                     mlp_ratio=config.MODEL.MR.MLP_RATIO[layer_index],
+                                     dropout=config.MODEL.MR.DROP_RATE[layer_index],
+                                     drop_path_rate=config.MODEL.MR.DROP_PATH_RATE[layer_index],
+                                     attn_drop_rate=config.MODEL.MR.ATTN_DROP_RATE[layer_index],
+                                     split_ratio=config.MODEL.MR.SPLIT_RATIO[layer_index],
+                                     channels=in_chans,
+                                     cluster_size=config.MODEL.MR.CLUSTER_SIZE[layer_index],
+                                     nbhd_size=config.MODEL.MR.NBHD_SIZE[layer_index],
+                                     n_scales=n_scales,
+                                     keep_old_scale=config.MODEL.MR.KEEP_OLD_SCALE,
+                                     scale=scale,
+                                     add_image_data_to_all=config.MODEL.MR.ADD_IMAGE_DATA_TO_ALL,
+                                     min_patch_size=min_patch_size,
+                                     upscale_ratio=config.MODEL.MR.UPSCALE_RATIO[layer_index],
+                                     out_features=out_features,
+                                     first_layer=first_layer)
+            else:
+                raise NotImplementedError(f"Unkown model: {name}")
+            all_backbones.append(bb)
+        model = OracleTeacherBackbone(backbones=all_backbones,
+                                      backbone_dims=config.MODEL.MR.EMBED_DIM,
+                                      out_dim=config.MODEL.MR.OUT_DIM,
+                                      all_out_features=config.MODEL.MR.OUT_FEATURES,
+                                      n_scales=config.MODEL.MR.N_RESOLUTION_SCALES,
+                                      num_classes=config.MODEL.NUM_CLASSES,
+                                      bb_in_feats=bb_in_feats)
     else:
         raise NotImplementedError(f"Unkown model: {model_type}")
 

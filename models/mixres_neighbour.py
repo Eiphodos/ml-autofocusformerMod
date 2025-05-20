@@ -26,14 +26,74 @@ pre_table = torch.stack([pre_xs, pre_ys, dis_table, sin_table, cos_table], dim=2
 pre_table[torch.bitwise_or(pre_table.isnan(), pre_table.isinf()).nonzero(as_tuple=True)] = 0
 pre_table = pre_table.reshape(-1, 5)
 
-def get_2dpos_of_ps(height, width, patch_size):
-    patches_coords = torch.meshgrid(torch.arange(0, width // patch_size),
-                                    torch.arange(0, height // patch_size),
-                                    indexing='ij')
+
+class PositionEmbeddingSine(nn.Module):
+    """
+    This is a more standard version of the position embedding, very similar to the one
+    used by the Attention is all you need paper, generalized to work on images.
+    """
+
+    def __init__(self, num_pos_feats=64, temperature=10000, normalize=False, scale=None):
+        super().__init__()
+        self.num_pos_feats = num_pos_feats
+        self.temperature = temperature
+        self.normalize = normalize
+        if scale is not None and normalize is False:
+            raise ValueError("normalize should be True if scale is passed")
+        if scale is None:
+            scale = 2 * math.pi
+        self.scale = scale
+
+    def forward(self, pos):
+        '''
+        pos - b x n x d
+        '''
+        b, n, d = pos.shape
+        y_embed = pos[:, :, 1]  # b x n
+        x_embed = pos[:, :, 0]
+        if self.normalize:
+            eps = 1e-6
+            y_embed = torch.clamp(y_embed / (y_embed.max() + eps), 0, 1) * self.scale
+            x_embed = torch.clamp(x_embed / (x_embed.max() + eps), 0 , 1) * self.scale
+
+        dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=pos.device)  # npf
+        dim_t = self.temperature ** (2 * (dim_t.div(2, rounding_mode='floor')) / self.num_pos_feats)  # npf
+
+        pos_x = x_embed[:, :, None] / dim_t  # b x n x npf
+        pos_y = y_embed[:, :, None] / dim_t
+        pos_x = torch.cat(
+            (pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), dim=2
+        )
+        pos_y = torch.cat(
+            (pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), dim=2
+        )
+        pos = torch.cat((pos_x, pos_y), dim=2)  # b x n x d'
+        return pos
+
+    def __repr__(self, _repr_indent=4):
+        head = "Positional encoding " + self.__class__.__name__
+        body = [
+            "num_pos_feats: {}".format(self.num_pos_feats),
+            "temperature: {}".format(self.temperature),
+            "normalize: {}".format(self.normalize),
+            "scale: {}".format(self.scale),
+        ]
+        # _repr_indent = 4
+        lines = [head] + [" " * _repr_indent + line for line in body]
+        return "\n".join(lines)
+
+
+def get_2dpos_of_curr_ps_in_min_ps(height, width, patch_size, min_patch_size, scale):
+    patches_coords = torch.meshgrid(torch.arange(0, width // min_patch_size, patch_size // min_patch_size), torch.arange(0, height // min_patch_size, patch_size // min_patch_size), indexing='ij')
     patches_coords = torch.stack([patches_coords[0], patches_coords[1]])
     patches_coords = patches_coords.permute(1, 2, 0)
-    patches_coords = patches_coords.view(-1, 2)
-    return patches_coords
+    patches_coords = patches_coords.transpose(0, 1)
+    patches_coords = patches_coords.reshape(-1, 2)
+    n_patches = patches_coords.shape[0]
+
+    scale_lvl = torch.tensor([[scale]] * n_patches)
+    patches_scale_coords = torch.cat([scale_lvl, patches_coords], dim=1)
+    return patches_scale_coords
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
@@ -276,13 +336,13 @@ class DownSampleConvBlock(nn.Module):
     def __init__(self, in_dim, out_dim):
         super().__init__()
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=2, padding=1)
-        self.b_norm = nn.BatchNorm2d(out_dim)
+        self.g_norm = nn.GroupNorm(1, out_dim)
         self.relu = nn.LeakyReLU()
 
     def forward(self, x):
         x = self.conv(x)
         x = self.relu(x)
-        x = self.b_norm(x)
+        x = self.g_norm(x)
 
         return x
 
@@ -454,6 +514,42 @@ class BasicLayer(nn.Module):
         return f"dim={self.dim}, depth={self.depth}"
 
 
+class DownSampleConvBlock(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=2, padding=1)
+        self.b_norm = nn.BatchNorm2d(out_dim)
+        self.relu = nn.LeakyReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.relu(x)
+        x = self.b_norm(x)
+
+        return x
+
+class OverlapPatchEmbedding(nn.Module):
+    def __init__(self, patch_size, embed_dim, channels):
+        super().__init__()
+
+        self.patch_size = patch_size
+
+        n_layers = int(torch.log2(torch.tensor([patch_size])).item())
+        conv_layers = []
+        emb_dims = [int(embed_dim // 2**(n_layers -1 - i)) for i in range(n_layers) ]
+        emb_dim_list = [channels] + emb_dims
+        for i in range(n_layers):
+            conv = DownSampleConvBlock(emb_dim_list[i], emb_dim_list[i + 1])
+            conv_layers.append(conv)
+        self.conv_layers = nn.Sequential(*conv_layers)
+        self.out_norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, im):
+        x = self.conv_layers(im).flatten(2).transpose(1, 2)
+        x = self.out_norm(x)
+        return x
+
+
 class MixResNeighbour(nn.Module):
     def __init__(
             self,
@@ -476,6 +572,7 @@ class MixResNeighbour(nn.Module):
             keep_old_scale=False,
             scale=1,
             add_image_data_to_all=False,
+            first_layer=False,
             out_features=['res5']
     ):
         super().__init__()
@@ -495,6 +592,8 @@ class MixResNeighbour(nn.Module):
         self.keep_old_scale = keep_old_scale
         self.scale = scale
         self.add_image_data_to_all = add_image_data_to_all
+        self.first_layer = first_layer
+        self.do_upsample = not (upscale_ratio == 0 or first_layer)
         self._out_features = out_features
 
         num_features = d_model
@@ -502,8 +601,7 @@ class MixResNeighbour(nn.Module):
 
         # Pos Embs
         #self.pe_layer = PositionEmbeddingSine(channels // 2, normalize=True)
-        self.rel_pos_emb = nn.Parameter(torch.randn(1, self.split_ratio, channels))
-        self.scale_emb = nn.Parameter(torch.randn(1, 1, channels))
+
 
         # stochastic depth
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, n_layers)]
@@ -524,28 +622,40 @@ class MixResNeighbour(nn.Module):
                                layer_scale=layer_scale,
                                )
 
-        # Split layers
-        self.split = nn.Linear(channels, channels * self.split_ratio)
-
-        #self.high_res_patcher = nn.Conv2d(3, channels, kernel_size=self.patch_size, stride=self.patch_size)
-        #self.high_res_patcher = OverlapPatchEmbedding(patch_size=self.patch_size, embed_dim=channels, channels=3)
-        if self.add_image_data_to_all:
-            input_dim = channels
-            image_projectors = []
-            for i in range(self.scale + 1):
-                in_dim = 3 * (self.patch_sizes[i]**2)
-                proj = nn.Linear(in_dim, channels)
-                image_projectors.append(proj)
-            self.image_patch_projectors = nn.ModuleList(image_projectors)
+        if self.first_layer:
+            self.pos_embed = PositionEmbeddingSine(d_model // 2, normalize=True)
+            self.patch_embed = OverlapPatchEmbedding(patch_size=self.patch_size, embed_dim=d_model, channels=channels)
         else:
-            input_dim = max(channels, 3 * self.patch_size ** 2)
-            self.image_patch_projection = nn.Linear(3 * (self.patch_size**2), input_dim)
-        self.high_res_norm1 = nn.LayerNorm(input_dim)
-        self.high_res_mlp = Mlp(in_features=input_dim, out_features=channels, hidden_features=channels, act_layer=nn.LeakyReLU)
-        self.high_res_norm2 = nn.LayerNorm(channels)
-        #self.old_token_weighting = nn.Parameter(torch.tensor([1.0], requires_grad=True, dtype=torch.float32))
+            if self.do_upsample:
+                # Split layers
+                self.split = nn.Linear(channels, channels * self.split_ratio)
 
-        self.token_projection = nn.Linear(channels, d_model)
+                self.rel_pos_emb = nn.Parameter(torch.randn(1, self.split_ratio, channels))
+                self.scale_emb = nn.Parameter(torch.randn(1, 1, channels))
+
+                #self.high_res_patcher = nn.Conv2d(3, channels, kernel_size=self.patch_size, stride=self.patch_size)
+                #self.high_res_patcher = OverlapPatchEmbedding(patch_size=self.patch_size, embed_dim=channels, channels=3)
+                if self.add_image_data_to_all:
+                    input_dim = channels
+                    image_projectors = []
+                    for i in range(self.scale + 1):
+                        in_dim = 3 * (self.patch_sizes[i]**2)
+                        proj = nn.Linear(in_dim, channels)
+                        image_projectors.append(proj)
+                    self.image_patch_projectors = nn.ModuleList(image_projectors)
+                else:
+                    input_dim = max(channels, 3 * self.patch_size ** 2)
+                    self.image_patch_projection = nn.Linear(3 * (self.patch_size**2), input_dim)
+                self.high_res_norm1 = nn.LayerNorm(input_dim)
+                self.high_res_mlp = Mlp(in_features=input_dim, out_features=channels, hidden_features=channels)
+                self.high_res_norm2 = nn.LayerNorm(channels)
+                #self.old_token_weighting = nn.Parameter(torch.tensor([1.0], requires_grad=True, dtype=torch.float32))
+
+            self.token_norm = nn.LayerNorm(channels)
+            if channels != d_model:
+                self.token_projection = nn.Linear(channels, d_model)
+            else:
+                self.token_projection = nn.Identity()
 
         '''
         # add a norm layer for each output
@@ -568,7 +678,7 @@ class MixResNeighbour(nn.Module):
         _load_weights(self, checkpoint_path, prefix)
 
 
-    def divide_tokens_to_split_and_keep(self, feat_at_curr_scale, pos_at_curr_scale, upsampling_mask):
+    def divide_tokens_to_split_and_keep_old(self, feat_at_curr_scale, pos_at_curr_scale, upsampling_mask):
         B, N, C = feat_at_curr_scale.shape
         k_split = int(feat_at_curr_scale.shape[1] * self.upscale_ratio)
         k_bottom = 0
@@ -587,34 +697,33 @@ class MixResNeighbour(nn.Module):
 
         return tokens_to_split, coords_to_split, tokens_to_keep, coords_to_keep
 
-    def divide_tokens_to_split_and_keep_new(self, feat_at_curr_scale, pos_at_curr_scale, importance_scores):
+
+    def divide_tokens_to_split_and_keep(self, feat_at_curr_scale, pos_at_curr_scale, importance_scores):
         B, N, C = feat_at_curr_scale.shape
         k_split = int(N * self.upscale_ratio)
-        k_keep = int(N - k_split)
 
-        soft_scores = torch.softmax(importance_scores, dim=1)
-
-        _, topk_idx = torch.topk(importance_scores, k=k_split, dim=1)
-        _, bottomk_idx = torch.topk(importance_scores, k=k_keep, dim=1, largest=False)
+        _, sorted_indices = torch.sort(importance_scores, dim=1, descending=False)
+        bottomk_idx = sorted_indices[:, :-k_split]
+        topk_idx = sorted_indices[:, -k_split:]
 
         mask_split_hard = torch.zeros_like(importance_scores).scatter(1, topk_idx, 1.0)
         mask_keep_hard = torch.zeros_like(importance_scores).scatter(1, bottomk_idx, 1.0)
 
+        # Straight-through estimator
+        soft_scores = torch.softmax(importance_scores, dim=1)
         mask_split = mask_split_hard + (soft_scores - soft_scores.detach())
         mask_keep = mask_keep_hard + ((1.0 - soft_scores) - (1.0 - soft_scores).detach())
-
         tokens_masked_split = feat_at_curr_scale * mask_split.unsqueeze(-1)
         tokens_masked_keep = feat_at_curr_scale * mask_keep.unsqueeze(-1)
 
         batch_idx = torch.arange(B, device=feat_at_curr_scale.device).unsqueeze(1)
-
         tokens_to_split = tokens_masked_split[batch_idx, topk_idx]
         tokens_to_keep = tokens_masked_keep[batch_idx, bottomk_idx]
-
         pos_to_split = pos_at_curr_scale[batch_idx, topk_idx]
         pos_to_keep = pos_at_curr_scale[batch_idx, bottomk_idx]
 
         return tokens_to_split, pos_to_split, tokens_to_keep, pos_to_keep
+
 
     def divide_feat_pos_on_scale(self, tokens, patches_scale_coords, curr_scale, upsampling_mask):
         B, N, _ = tokens.shape
@@ -641,6 +750,7 @@ class MixResNeighbour(nn.Module):
     def split_features(self, tokens_to_split):
         x_splitted = self.split(tokens_to_split)
         x_splitted = rearrange(x_splitted, 'b n (s d) -> b n s d', s=self.split_ratio).contiguous()
+        #x_splitted = tokens_to_split.unsqueeze(2).repeat(1, 1, self.split_ratio, 1)
         x_splitted = x_splitted + self.rel_pos_emb + self.scale_emb
         x_splitted = rearrange(x_splitted, 'b n s d -> b (n s) d', s=self.split_ratio).contiguous()
         return x_splitted
@@ -678,7 +788,7 @@ class MixResNeighbour(nn.Module):
         im_high = im[b_, :, y_pos, x_pos]
         im_high = rearrange(im_high, 'b (n p) c -> b n (p c)', b=b, n=n, c=3)
         im_high = self.image_patch_projection(im_high)
-        im_high = nn.functional.leaky_relu(im_high)
+        im_high = nn.functional.gelu(im_high)
         im_high = self.high_res_norm1(im_high)
         im_high = self.high_res_mlp(im_high)
         im_high = self.high_res_norm2(im_high)
@@ -702,7 +812,7 @@ class MixResNeighbour(nn.Module):
         all_pos_sorted_by_scale = torch.cat(all_pos_sorted_by_scale, dim=1)
         all_projected_image_features = torch.cat(all_projected_image_features, dim=1)
 
-        #all_projected_image_features = nn.functional.leaky_relu(all_projected_image_features)
+        all_projected_image_features = nn.functional.gelu(all_projected_image_features)
         all_projected_image_features = self.high_res_norm1(all_projected_image_features)
         all_projected_image_features = self.high_res_mlp(all_projected_image_features)
         all_projected_image_features = self.high_res_norm2(all_projected_image_features)
@@ -786,6 +896,7 @@ class MixResNeighbour(nn.Module):
                 all_feat = torch.cat(all_feat, dim=1)
                 all_pos = torch.cat(all_pos, dim=1)
 
+        all_feat = self.token_norm(all_feat)
         all_feat = self.token_projection(all_feat)
 
         return all_feat, all_pos
@@ -795,10 +906,24 @@ class MixResNeighbour(nn.Module):
         PS = self.patch_size
         min_patched_im_size = (H // self.min_patch_size, W // self.min_patch_size)
 
-
-        x, pos = self.upsample_features(im, scale, features, features_pos, upsampling_mask)
+        if self.first_layer:
+            x = self.patch_embed(im)
+            pos = get_2dpos_of_curr_ps_in_min_ps(H, W, PS, self.min_patch_size, scale).to('cuda')
+            pos = pos.repeat(B, 1, 1)
+            x = x + self.pos_embed(pos[:, :, 1:])
+        else:
+            if self.do_upsample:
+                x, pos = self.upsample_features(im, scale, features, features_pos, upsampling_mask)
+                if torch.isnan(x).any():
+                    print("NaNs detected in upsampled features in scale {}".format(scale))
+            else:
+                features = self.token_norm(features)
+                x = self.token_projection(features)
+                pos = features_pos
+                if torch.isnan(x).any():
+                    print("NaNs detected in projected features in scale {}".format(scale))
         pos, x = self.layers(pos, x, h=min_patched_im_size[0], w=min_patched_im_size[1], on_grid=False)
-        #success = self.test_pos_cover_and_overlap(pos[0], H, W, scale)
+
         outs = {}
         for s in range(scale + 1):
             out_idx = self.n_scales - s + 1
