@@ -45,8 +45,8 @@ class UpDownBackbone(nn.Module):
 
         tot_out_dim = backbone_dims[-1]
         #self.head_norm = nn.LayerNorm(tot_out_dim)
-        #self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
-        self.head = nn.Linear(tot_out_dim, num_classes)
+        self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
+        #self.head = nn.Linear(tot_out_dim, num_classes)
 
         self.apply(self._init_weights)
 
