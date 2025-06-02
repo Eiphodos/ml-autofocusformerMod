@@ -558,7 +558,7 @@ class MixResNeighbour(nn.Module):
             d_model,
             n_heads,
             dropout=0.0,
-            drop_path_rate=0.0,
+            drop_path_rate=[0.0],
             attn_drop_rate=0.0,
             channels=1,
             mlp_ratio=4.0,
@@ -604,7 +604,6 @@ class MixResNeighbour(nn.Module):
 
 
         # stochastic depth
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, n_layers)]
         norm_layer = nn.LayerNorm
 
 
@@ -617,7 +616,7 @@ class MixResNeighbour(nn.Module):
                                mlp_ratio=mlp_ratio,
                                drop=dropout,
                                attn_drop=attn_drop_rate,
-                               drop_path=dpr,
+                               drop_path=drop_path_rate,
                                norm_layer=norm_layer,
                                layer_scale=layer_scale,
                                )

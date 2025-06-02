@@ -6,6 +6,7 @@
 # --------------------------------------------------------
 # Adapted for AutoFocusFormer by Ziwen 2023
 
+import torch
 from .aff_transformer import AutoFocusFormer
 from .maskfiner_oracle_teacher_model import OracleTeacherBackbone
 from .maskfiner_up_down import UpDownBackbone
@@ -104,6 +105,9 @@ def build_model(config):
                 scale = layer_index
                 patch_sizes = config.MODEL.MR.PATCH_SIZES[:layer_index + 1]
                 out_features = config.MODEL.MR.OUT_FEATURES[-(layer_index+1):]
+            drop_path_rate = config.MODEL.MR.DROP_PATH_RATE
+            dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(config.MODEL.MR.DEPTHS))]
+            drop_path = dpr[sum(config.MODEL.MR.DEPTHS[:layer_index]):sum(config.MODEL.MR.DEPTHS[:layer_index + 1])]
             if name == 'MixResViT':
                 bb = MixResViT(patch_sizes=patch_sizes,
                                n_layers=config.MODEL.MR.DEPTHS[layer_index],
@@ -111,14 +115,16 @@ def build_model(config):
                                n_heads=config.MODEL.MR.NUM_HEADS[layer_index],
                                mlp_ratio=config.MODEL.MR.MLP_RATIO[layer_index],
                                dropout=config.MODEL.MR.DROP_RATE[layer_index],
-                               drop_path_rate=config.MODEL.MR.DROP_PATH_RATE[layer_index],
+                               drop_path_rate=drop_path,
                                split_ratio=config.MODEL.MR.SPLIT_RATIO[layer_index],
                                channels=in_chans,
                                n_scales=n_scales,
                                min_patch_size=min_patch_size,
                                upscale_ratio=config.MODEL.MR.UPSCALE_RATIO[layer_index],
                                out_features=out_features,
-                               first_layer=first_layer)
+                               first_layer=first_layer,
+                               layer_scale=config.MODEL.MR.LAYER_SCALE,
+                               num_register_tokens=config.MODEL.MR.NUM_REGISTER_TOKENS)
             elif name == 'MixResNeighbour':
                 bb = MixResNeighbour(patch_sizes=patch_sizes,
                                      n_layers=config.MODEL.MR.DEPTHS[layer_index],
@@ -126,7 +132,7 @@ def build_model(config):
                                      n_heads=config.MODEL.MR.NUM_HEADS[layer_index],
                                      mlp_ratio=config.MODEL.MR.MLP_RATIO[layer_index],
                                      dropout=config.MODEL.MR.DROP_RATE[layer_index],
-                                     drop_path_rate=config.MODEL.MR.DROP_PATH_RATE[layer_index],
+                                     drop_path_rate=drop_path,
                                      attn_drop_rate=config.MODEL.MR.ATTN_DROP_RATE[layer_index],
                                      split_ratio=config.MODEL.MR.SPLIT_RATIO[layer_index],
                                      channels=in_chans,
@@ -138,6 +144,7 @@ def build_model(config):
                                      add_image_data_to_all=config.MODEL.MR.ADD_IMAGE_DATA_TO_ALL,
                                      min_patch_size=min_patch_size,
                                      upscale_ratio=config.MODEL.MR.UPSCALE_RATIO[layer_index],
+                                     layer_scale=config.MODEL.MR.LAYER_SCALE,
                                      out_features=out_features,
                                      first_layer=first_layer)
             else:

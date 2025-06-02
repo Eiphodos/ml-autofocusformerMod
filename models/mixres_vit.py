@@ -103,13 +103,30 @@ class DropPath(nn.Module):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
 
 
+class DWConv(nn.Module):
+    def __init__(self, dim=768):
+        super(DWConv, self).__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
+
+    def forward(self, x, H, W):
+        B, N, C = x.shape
+        x = rearrange(x.transpose(1, 2), 'b c (h w) -> b c h w', b=B, c=C, h=H, w=W).contiguous()
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2)
+
+        return x
+
+
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout, out_dim=None):
+    def __init__(self, dim, hidden_dim, dropout, dw_conv=True, out_dim=None):
         super().__init__()
         self.fc1 = nn.Linear(dim, hidden_dim)
         self.act = nn.GELU()
         if out_dim is None:
             out_dim = dim
+        if dw_conv:
+            self.dwconv = DWConv(hidden_dim)
+        self.dw_conv = dw_conv
         self.fc2 = nn.Linear(hidden_dim, out_dim)
         self.drop = nn.Dropout(dropout)
 
@@ -117,8 +134,10 @@ class FeedForward(nn.Module):
     def unwrapped(self):
         return self
 
-    def forward(self, x):
+    def forward(self, x, h, w):
         x = self.fc1(x)
+        if self.dw_conv:
+            x = self.dwconv(x, h, w)
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
@@ -143,7 +162,7 @@ class Attention(nn.Module):
     def unwrapped(self):
         return self
 
-    def forward(self, x):
+    def forward(self, x, h, w):
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -164,11 +183,11 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        return x, attn
+        return x
 
 
 class Block(nn.Module):
-    def __init__(self, dim, heads, mlp_dim, dropout, drop_path):
+    def __init__(self, dim, heads, mlp_dim, dropout, drop_path, layer_scale=0.0):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.norm2 = nn.LayerNorm(dim)
@@ -176,14 +195,24 @@ class Block(nn.Module):
         self.mlp = FeedForward(dim, mlp_dim, dropout)
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-    def forward(self, x, return_attention=False):
-        orig_dtype = x.dtype
-        y, attn = self.attn(self.norm1(x.float()))
-        if return_attention:
-            return attn
-        x = x + self.drop_path(y)
-        x = x + self.drop_path(self.mlp(self.norm2(x.float())))
-        return x.to(orig_dtype)
+        # layer_scale code copied from https://github.com/SHI-Labs/Neighborhood-Attention-Transformer/blob/a2cfef599fffd36d058a5a4cfdbd81c008e1c349/classification/nat.py
+        self.layer_scale = False
+        if layer_scale is not None and type(layer_scale) in [int, float] and layer_scale > 0:
+            self.layer_scale = True
+            self.gamma1 = nn.Parameter(layer_scale * torch.ones(dim), requires_grad=True)
+            self.gamma2 = nn.Parameter(layer_scale * torch.ones(dim), requires_grad=True)
+
+    def forward(self, x, h, w):
+        y = self.attn(self.norm1(x), h, w)
+        if not self.layer_scale:
+            x = x + self.drop_path(y)
+            x = x + self.drop_path(self.mlp(self.norm2(x), h, w))
+        else:
+            x = x + self.drop_path(self.gamma1 * y)
+            x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x), h, w))
+        if torch.isnan(x).any():
+            print("NaNs detected in ff-attn in ViT")
+        return x
 
 class DownSampleConvBlock(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -256,19 +285,19 @@ class TransformerLayer(nn.Module):
             n_heads,
             dim_ff,
             dropout=0.0,
-            drop_path_rate=0.0,
+            drop_path_rate=[0.0],
+            layer_scale=0.0
     ):
         super().__init__()
 
         # transformer blocks
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, n_blocks)]
         self.blocks = nn.ModuleList(
-            [Block(dim, n_heads, dim_ff, dropout, dpr[i]) for i in range(n_blocks)]
+            [Block(dim, n_heads, dim_ff, dropout, drop_path_rate[i], layer_scale) for i in range(n_blocks)]
         )
 
-    def forward(self, x):
+    def forward(self, x, h, w):
         for blk_idx in range(len(self.blocks)):
-            x = self.blocks[blk_idx](x)
+            x = self.blocks[blk_idx](x, h, w)
         return x
 
 
@@ -281,13 +310,15 @@ class MixResViT(nn.Module):
             n_heads,
             mlp_ratio=4.0,
             dropout=0.0,
-            drop_path_rate=0.0,
+            drop_path_rate=[0.0],
             channels=3,
             split_ratio=4,
             n_scales=2,
             min_patch_size=4,
             upscale_ratio=0.0,
             first_layer=True,
+            layer_scale=0.0,
+            num_register_tokens=0,
             out_features=['res5']
     ):
         super().__init__()
@@ -304,6 +335,7 @@ class MixResViT(nn.Module):
         self.min_patch_size = min_patch_size
         self.upscale_ratio = upscale_ratio
         self.first_layer = first_layer
+        self.num_register_tokens = num_register_tokens
 
         num_features = d_model
         self.num_features = num_features
@@ -325,7 +357,11 @@ class MixResViT(nn.Module):
                 self.token_projection = nn.Identity()
         dim_ff = int(d_model * mlp_ratio)
         # transformer layers
-        self.layers = TransformerLayer(n_layers, d_model, n_heads, dim_ff, dropout, drop_path_rate)
+        self.layers = TransformerLayer(n_layers, d_model, n_heads, dim_ff, dropout, drop_path_rate, layer_scale)
+
+        self.register_tokens = (
+            nn.Parameter(torch.zeros(1, num_register_tokens, d_model)) if num_register_tokens else None
+        )
 
         #nn.init.trunc_normal_(self.pos_embed, std=0.02)
         self.pre_logits = nn.Identity()
@@ -367,7 +403,10 @@ class MixResViT(nn.Module):
             if torch.isnan(x).any():
                 print("NaNs detected in projected features in ViT in scale {}".format(scale))
 
-        x = self.layers(x)
+        if self.register_tokens is not None:
+            x = torch.cat([self.register_tokens.expand(B, -1, -1), x], dim=1)
+        x = self.layers(x, h=patched_im_size[0], w=patched_im_size[1])
+        x = x[:, self.num_register_tokens:]
         orig_dtype = x.dtype
         outs = {}
         out_name = self._out_features[0]
