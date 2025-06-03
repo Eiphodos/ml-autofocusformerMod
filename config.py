@@ -82,7 +82,7 @@ _C.MODEL.MR.SPLIT_RATIO = [4, 4, 4, 4]
 _C.MODEL.MR.MLP_RATIO = [4., 4., 4., 4.]
 _C.MODEL.MR.UPSCALE_RATIO = [0.25, 0.25, 0.25, 0.25]
 _C.MODEL.MR.DROP_RATE = [0.0, 0.0, 0.0, 0.0]
-_C.MODEL.MR.DROP_PATH_RATE = [0.3, 0.3, 0.3, 0.3]
+_C.MODEL.MR.DROP_PATH_RATE = 0.3
 _C.MODEL.MR.ATTN_DROP_RATE = [0.0, 0.0, 0.0, 0.0]
 _C.MODEL.MR.OUT_FEATURES = ["res2", "res3", "res4", "res5"]
 _C.MODEL.MR.CLUSTER_SIZE = [8, 8, 8, 8]
@@ -91,6 +91,8 @@ _C.MODEL.MR.KEEP_OLD_SCALE = False
 _C.MODEL.MR.ADD_IMAGE_DATA_TO_ALL = False
 _C.MODEL.MR.OUT_DIM = 256
 _C.MODEL.MR.N_RESOLUTION_SCALES = 4
+_C.MODEL.MR.NUM_REGISTER_TOKENS = 0
+_C.MODEL.MR.LAYER_SCALE = 0.0
 
 # -----------------------------------------------------------------------------
 # Training settings
