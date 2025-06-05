@@ -43,10 +43,10 @@ class UpDownBackbone(nn.Module):
         self.bb_scales = scales + scales[-2::-1]
         self.num_classes = num_classes
 
-        tot_out_dim = sum(backbone_dims[-4:])
+        tot_out_dim = backbone_dims[-1]
         #self.head_norm = nn.LayerNorm(tot_out_dim)
-        self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
-        #self.head = nn.Linear(tot_out_dim, num_classes)
+        #self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
+        self.head = nn.Linear(tot_out_dim, num_classes)
 
         self.apply(self._init_weights)
 
@@ -128,12 +128,12 @@ class UpDownBackbone(nn.Module):
         #    pooled = feat.mean(1)
         #    #projed = self.head_projs[i](pooled)
         #    out_scale_vectors.append(pooled)
-        out_scale_vectors = outs[self.all_out_features[-1]][-4:]
-        out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
+        #out_scale_vectors = outs[self.all_out_features[-1]][-4:]
+        #out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
         #out_scale_vectors = self.head_norm(out_scale_vectors)
         #out_scale_vectors = nn.functional.gelu(out_scale_vectors)
-        #out_scale_vectors = output[self.all_out_features[-1]]
-        out_scale_vectors = self.head_norm(out_scale_vectors)
+        out_scale_vectors = output[self.all_out_features[-1]]
+        #out_scale_vectors = self.head_norm(out_scale_vectors)
         out_scale_vectors = out_scale_vectors.mean(1)
         out = self.head(out_scale_vectors)
 
