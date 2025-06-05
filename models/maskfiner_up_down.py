@@ -44,7 +44,7 @@ class UpDownBackbone(nn.Module):
         self.num_classes = num_classes
 
         tot_out_dim = backbone_dims[-1]
-        #self.head_norm = nn.LayerNorm(tot_out_dim)
+        self.head_norm = nn.LayerNorm(tot_out_dim)
         #self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
         self.head = nn.Linear(tot_out_dim, num_classes)
 
@@ -131,7 +131,9 @@ class UpDownBackbone(nn.Module):
         #out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
         #out_scale_vectors = self.head_norm(out_scale_vectors)
         #out_scale_vectors = nn.functional.gelu(out_scale_vectors)
-        out_scale_vectors = output[self.all_out_features[-1]].mean(1)
+        out_scale_vectors = output[self.all_out_features[-1]]
+        out_scale_vectors = self.head_norm(out_scale_vectors)
+        out_scale_vectors = out_scale_vectors.mean(1)
         out = self.head(out_scale_vectors)
 
         return out
