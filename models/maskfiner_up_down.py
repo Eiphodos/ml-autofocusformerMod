@@ -122,18 +122,19 @@ class UpDownBackbone(nn.Module):
 
         outs['min_spatial_shape'] = output['min_spatial_shape']
 
-        out_scale_vectors = []
-        for i, f in enumerate(self.all_out_features[::-1]):
-            feat = outs[f][-1]
-            pooled = feat.mean(1)
-            #projed = self.head_projs[i](pooled)
-            out_scale_vectors.append(pooled)
+        #out_scale_vectors = []
+        #for i, f in enumerate(self.all_out_features[::-1]):
+        #    feat = outs[f][-1]
+        #    pooled = feat.mean(1)
+        #    #projed = self.head_projs[i](pooled)
+        #    out_scale_vectors.append(pooled)
+        out_scale_vectors = outs[self.all_out_features[-1]][-4:]
         out_scale_vectors = torch.cat(out_scale_vectors, dim=1)
         #out_scale_vectors = self.head_norm(out_scale_vectors)
         #out_scale_vectors = nn.functional.gelu(out_scale_vectors)
         #out_scale_vectors = output[self.all_out_features[-1]]
-        #out_scale_vectors = self.head_norm(out_scale_vectors)
-        #out_scale_vectors = out_scale_vectors.mean(1)
+        out_scale_vectors = self.head_norm(out_scale_vectors)
+        out_scale_vectors = out_scale_vectors.mean(1)
         out = self.head(out_scale_vectors)
 
         return out
