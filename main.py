@@ -248,7 +248,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         loss = criterion(outputs, targets)
         loss = loss / ACCUMULATION_STEPS
         total_loss = loss
-        grad_norm = loss_scaler(total_loss, optimizer, clip_grad=config.TRAIN.CLIP_GRAD,
+        grad_norm = loss_scaler(total_loss, optimizer, logger, clip_grad=config.TRAIN.CLIP_GRAD,
                                 parameters=model.parameters(), create_graph=False,
                                 update_grad=(idx + 1) % ACCUMULATION_STEPS == 0)
         if (idx + 1) % ACCUMULATION_STEPS == 0:
