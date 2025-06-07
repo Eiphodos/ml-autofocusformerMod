@@ -184,9 +184,9 @@ class NativeScalerWithGradNormCount:
                 assert parameters is not None
                 self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
                 norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad, error_if_nonfinite=False)
-                if norm > 10:  # or whatever threshold you like
-                    logger.info("Large total grad: {}, skipping step...".format(norm))
-                    optimizer.zero_grad()
+                #if norm > 10:  # or whatever threshold you like
+                #    logger.info("Large total grad: {}, skipping step...".format(norm))
+                #    optimizer.zero_grad()
             else:
                 self._scaler.unscale_(optimizer)
                 norm = ampscaler_get_grad_norm(parameters)
