@@ -100,7 +100,8 @@ def build_model(config):
                 scale = n_layers - layer_index - 1
                 patch_sizes = config.MODEL.MR.PATCH_SIZES[layer_index:]
                 out_features = config.MODEL.MR.OUT_FEATURES[-(n_layers - layer_index):]
-                in_chans = sum(config.MODEL.MR.EMBED_DIM[-(layer_index + 1):-(n_layers - layer_index)])
+                #in_chans = sum(config.MODEL.MR.EMBED_DIM[-(layer_index + 1):-(n_layers - layer_index)])
+                in_chans = config.MODEL.MR.EMBED_DIM[layer_index - 1] + config.MODEL.MR.EMBED_DIM[n_layers - layer_index - 1]
             else:
                 scale = layer_index
                 patch_sizes = config.MODEL.MR.PATCH_SIZES[:layer_index + 1]
