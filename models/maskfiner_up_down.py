@@ -190,7 +190,7 @@ def color_dist(im1, im2):
 
 def compute_color_dist(im):
     B, C, H, W = im.shape
-    edge_mask = torch.zeros(B, H, W, dtype=torch.float)
+    edge_mask = torch.zeros(B, H, W, dtype=torch.float).to(im.device)
 
     # top
     dist = color_dist(im[:, :, 1:, :], im[:, :, :-1, :])
