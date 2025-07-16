@@ -109,9 +109,10 @@ class UpDownBackbone(nn.Module):
             if j == self.n_scales - 1:
                 up = False
             if up:
-                B, N, C = all_feat[0].shape
-                upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                #B, N, C = all_feat[0].shape
+                #upsampling_mask = self.generate_random_upsampling_mask(B, N)
                 #upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
+                upsampling_mask = self.generate_color_change_upsampling_mask(images=im, pos=all_pos[0], level=scale)
 
             #print("Upsampling mask for scale {}: pred: {}, oracle: {}".format(scale, upsampling_mask_pred.shape, upsampling_mask_oracle.shape))
 
@@ -154,3 +155,57 @@ class UpDownBackbone(nn.Module):
     def generate_max_norm_upsampling_mask(self, features):
         upsampling_mask = features.norm(dim=2)
         return upsampling_mask
+
+
+    def generate_color_change_upsampling_mask(self, images, pos, level):
+        B, N, C = pos.shape
+        patch_size = self.backbones[level].patch_size
+        image_color_dist = compute_color_dist(images)
+        #image_color_dist_patched = rearrange(images, 'b (hp ph) (wp pw) -> b (hp wp) (ph pw)')
+        #image_color_dist_patched = image_color_dist_patched.sum(-1)
+        disagreement_map = []
+        for batch in range(B):
+            pos_batch = pos[batch]
+            im_cdist_batch = image_color_dist[batch]
+
+            p_org = (pos_batch * self.backbones[0].min_patch_size).long()
+            patch_coords = torch.stack(torch.meshgrid(torch.arange(0, patch_size), torch.arange(0, patch_size)))
+            patch_coords = patch_coords.permute(1, 2, 0).transpose(0, 1).reshape(-1, 2).to(pos.device)
+            pos_patches = p_org.unsqueeze(1) + patch_coords.unsqueeze(0)
+            pos_patches = pos_patches.view(-1, 2)
+            x_pos = pos_patches[..., 0].long()
+            y_pos = pos_patches[..., 1].long()
+
+            im_cdist_patched = im_cdist_batch[y_pos, x_pos]
+            im_cdist_patched = rearrange(im_cdist_patched, '(n ph pw) -> n ph pw', n=N, ph=patch_size, pw=patch_size)
+
+            disagreement = im_cdist_patched.sum(dim=(1, 2))
+            disagreement_map.append(disagreement)
+        disagreement_map = torch.stack(disagreement_map).float()
+        return disagreement_map
+
+def color_dist(im1, im2):
+    cdist = torch.abs(im1[:, 0] - im2[:, 0]) + torch.abs(im1[:, 1] - im2[:, 1]) + torch.abs(im1[:, 2] - im2[:, 2])
+    return cdist
+
+def compute_color_dist(im):
+    B, C, H, W = im.shape
+    edge_mask = torch.zeros(B, H, W, dtype=torch.float)
+
+    # top
+    dist = color_dist(im[:, :, 1:, :], im[:, :, :-1, :])
+    edge_mask[:, 1:, :] += dist
+
+    # bot
+    dist = color_dist(im[:, :, :-1, :], im[:, :, 1:, :])
+    edge_mask[:, :-1, :] += dist
+
+    # left
+    dist = color_dist(im[:, :, :, 1:], im[:, :, :, :-1])
+    edge_mask[:, :, 1:] += dist
+
+    # right
+    dist = color_dist(im[:, :, :, :-1], im[:, :, :, 1:])
+    edge_mask[:, :, :-1] += dist
+
+    return edge_mask
