@@ -109,7 +109,7 @@ class UpDownBackbone(nn.Module):
             if j == self.n_scales - 1:
                 up = False
             if up:
-                #B, N, C = all_feat[0].shape
+                B, N, C = all_feat[0].shape
                 upsampling_mask = self.generate_random_upsampling_mask(B, N)
                 #upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
                 #upsampling_mask = self.generate_color_change_upsampling_mask(images=im, pos=all_pos[0], level=scale)
