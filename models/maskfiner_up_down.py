@@ -110,9 +110,9 @@ class UpDownBackbone(nn.Module):
                 up = False
             if up:
                 #B, N, C = all_feat[0].shape
-                #upsampling_mask = self.generate_random_upsampling_mask(B, N)
+                upsampling_mask = self.generate_random_upsampling_mask(B, N)
                 #upsampling_mask = self.upsamplers[scale](all_feat[0]).squeeze(-1)
-                upsampling_mask = self.generate_color_change_upsampling_mask(images=im, pos=all_pos[0], level=scale)
+                #upsampling_mask = self.generate_color_change_upsampling_mask(images=im, pos=all_pos[0], level=scale)
 
             #print("Upsampling mask for scale {}: pred: {}, oracle: {}".format(scale, upsampling_mask_pred.shape, upsampling_mask_oracle.shape))
 
