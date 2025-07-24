@@ -1,0 +1,36 @@
+MODEL:
+  TYPE: maskfinerUD
+  NAME: maskfiner_up_down
+  DROP_PATH_RATE: 0.0
+  MR:
+    NAME: ["MixResViT","MixResNeighbour", "MixResNeighbour", "MixResNeighbour", "MixResNeighbour", "MixResNeighbour", "MixResViT"]
+    EMBED_DIM: [768,384,192,96,192,384,768]
+    DEPTHS: [1,1,1,4,4,14,2]
+    NUM_HEADS: [ 24, 12, 6, 3,6,12,24]
+    PATCH_SIZES: [32, 16, 8, 4, 8, 16, 32]
+    DROP_RATE: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    DROP_PATH_RATE: 0.3
+    ATTN_DROP_RATE: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    UPSCALE_RATIO: [0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
+    SPLIT_RATIO: [4, 4, 4, 4, 4, 4, 4]
+    MLP_RATIO: [3., 3., 3., 3., 3., 3., 3.]
+    CLUSTER_SIZE: [8, 8, 8, 8, 8, 8, 8]
+    NBHD_SIZE: [48,48,48,48,48,48,48]
+    OUT_FEATURES: ["res2", "res3", "res4", "res5"]
+    KEEP_OLD_SCALE: True
+    ADD_IMAGE_DATA_TO_ALL: False
+    OUT_DIM: 256
+    N_RESOLUTION_SCALES: 4
+    LAYER_SCALE: 1e-5
+DATA:
+  DATASET: imagenet 
+  IMG_SIZE: 224
+  BATCH_SIZE: 256
+TRAIN:
+  EPOCHS: 300
+  BASE_LR: 5e-4
+  MIN_LR: 5e-6
+  WARMUP_LR: 5e-7
+AUG:
+  MIXUP: 0.8
+  CUTMIX: 1.0
