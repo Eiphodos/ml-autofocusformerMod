@@ -334,7 +334,8 @@ def validate(config, data_loader, model, logger):
         # compute output
         with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
             output = model(images)
-
+        if len(output.shape) == 3:
+            targets = targets.unsqueeze(1).repeat(1, output.shape[2])
         # measure accuracy and record loss
         loss = criterion(output, target)
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
