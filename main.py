@@ -245,6 +245,8 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
             ACCUMULATION_STEPS = 1
         else:
             ACCUMULATION_STEPS = config.TRAIN.ACCUMULATION_STEPS
+        if len(outputs.shape) == 3:
+            targets = targets.unsqueeze(1).repeat(1, outputs.shape[2])
         loss = criterion(outputs, targets)
         loss = loss / ACCUMULATION_STEPS
         total_loss = loss
