@@ -254,6 +254,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
                 loss_new = criterion(outputs[i], targets)
                 loss_list.append(loss_new.item())
                 loss = loss + loss_new
+            loss = loss / n_losses
         else:
             loss = criterion(outputs, targets)
         loss = loss / ACCUMULATION_STEPS
@@ -352,6 +353,7 @@ def validate(config, data_loader, model, logger):
                 loss_new = criterion(output[i], target)
                 loss_list.append(loss_new.item())
                 loss = loss + loss_new
+            loss = loss / n_losses
             output = output[0]
         else:
             loss = criterion(output, target)
