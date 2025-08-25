@@ -246,7 +246,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         else:
             ACCUMULATION_STEPS = config.TRAIN.ACCUMULATION_STEPS
         if len(outputs.shape) == 3:
-            targets = targets.unsqueeze(1).repeat(1, outputs.shape[2])
+            targets = targets.unsqueeze(2).repeat(1, 1, outputs.shape[2])
         loss = criterion(outputs, targets)
         loss = loss / ACCUMULATION_STEPS
         total_loss = loss
@@ -335,7 +335,7 @@ def validate(config, data_loader, model, logger):
         with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
             output = model(images)
         if len(output.shape) == 3:
-            targets = targets.unsqueeze(1).repeat(1, output.shape[2])
+            targets = targets.unsqueeze(2).repeat(1, 1, outputs.shape[2])
         # measure accuracy and record loss
         loss = criterion(output, target)
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
