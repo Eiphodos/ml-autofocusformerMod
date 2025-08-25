@@ -138,7 +138,6 @@ class UpDownBackbone(nn.Module):
         #out_scale_vectors = output[self.all_out_features[-1]]
         #out_scale_vectors = out_scale_vectors.mean(1)
         #out = self.head(out_scale_vectors)
-        out_preds = torch.stack(out_preds, dim=2)
         return out_preds
 
 

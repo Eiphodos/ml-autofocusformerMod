@@ -245,9 +245,17 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
             ACCUMULATION_STEPS = 1
         else:
             ACCUMULATION_STEPS = config.TRAIN.ACCUMULATION_STEPS
-        if len(outputs.shape) == 3:
-            targets = targets.unsqueeze(2).repeat(1, 1, outputs.shape[2])
-        loss = criterion(outputs, targets)
+        if type(outputs) == list:
+            n_losses = len(output)
+            loss_list = []
+            loss = criterion(outputs[0], targets)
+            loss_list.append(loss.item())
+            for i in range(1, n_losses):
+                loss_new = criterion(outputs[i], targets)
+                loss_list.append(loss_new.item())
+                loss = loss + loss_new
+        else:
+            loss = criterion(outputs, targets)
         loss = loss / ACCUMULATION_STEPS
         total_loss = loss
         grad_norm = loss_scaler(total_loss, optimizer, logger, clip_grad=config.TRAIN.CLIP_GRAD,
@@ -334,10 +342,19 @@ def validate(config, data_loader, model, logger):
         # compute output
         with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
             output = model(images)
-        if len(output.shape) == 3:
-            targets = targets.unsqueeze(2).repeat(1, 1, outputs.shape[2])
         # measure accuracy and record loss
-        loss = criterion(output, target)
+        if type(output) == list:
+            n_losses = len(output)
+            loss_list = []
+            loss = criterion(output[0], target)
+            loss_list.append(loss.item())
+            for i in range(1, n_losses):
+                loss_new = criterion(output[i], target)
+                loss_list.append(loss_new.item())
+                loss = loss + loss_new
+            output = output[0]
+        else:
+            loss = criterion(output, target)
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
         acc1 = reduce_tensor(acc1)
