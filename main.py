@@ -246,7 +246,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         else:
             ACCUMULATION_STEPS = config.TRAIN.ACCUMULATION_STEPS
         if type(outputs) == list:
-            n_losses = len(output)
+            n_losses = len(outputs)
             loss_list = []
             loss = criterion(outputs[0], targets)
             loss_list.append(loss.item())
