@@ -276,10 +276,10 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
                     logger.info(f'Inf in gradients at {name}')
             if outputs is None:
                 logger.info(f'Outputs are None, something went very wrong!')
-            if torch.isnan(outputs).any():
-                logger.info("NaN output detected")
-            if torch.isinf(outputs).any():
-                logger.info("Inf output detected")
+            #if torch.isnan(outputs).any():
+            #    logger.info("NaN output detected")
+            #if torch.isinf(outputs).any():
+            #    logger.info("Inf output detected")
         if loss_scaler.is_enabled():
             loss_scale_value = loss_scaler.state_dict()["scale"]
         else:
