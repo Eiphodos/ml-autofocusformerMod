@@ -354,7 +354,7 @@ def validate(config, data_loader, model, logger):
                 loss_list.append(loss_new.item())
                 loss = loss + loss_new
             loss = loss / n_losses
-            output = output[0]
+            output = output[-1]
         else:
             loss = criterion(output, target)
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
