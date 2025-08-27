@@ -157,7 +157,8 @@ def build_model(config):
                                       all_out_features=config.MODEL.MR.OUT_FEATURES,
                                       n_scales=config.MODEL.MR.N_RESOLUTION_SCALES,
                                       num_classes=config.MODEL.NUM_CLASSES,
-                                      bb_in_feats=bb_in_feats)
+                                      bb_in_feats=bb_in_feats,
+                                      aux_loss=config.MODEL.MR.AUX_LOSS)
     else:
         raise NotImplementedError(f"Unkown model: {model_type}")
 

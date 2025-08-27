@@ -93,6 +93,7 @@ _C.MODEL.MR.OUT_DIM = 256
 _C.MODEL.MR.N_RESOLUTION_SCALES = 4
 _C.MODEL.MR.NUM_REGISTER_TOKENS = 0
 _C.MODEL.MR.LAYER_SCALE = 0.0
+_C.MODEL.MR.AUX_LOSS = False
 
 # -----------------------------------------------------------------------------
 # Training settings

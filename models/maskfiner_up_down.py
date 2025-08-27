@@ -26,7 +26,7 @@ class MLP(nn.Module):
 
 
 class UpDownBackbone(nn.Module):
-    def __init__(self, backbones, backbone_dims, out_dim, all_out_features, n_scales, num_classes, bb_in_feats):
+    def __init__(self, backbones, backbone_dims, out_dim, all_out_features, n_scales, num_classes, bb_in_feats, aux_loss):
         super().__init__()
         self.backbones = nn.ModuleList(backbones)
         final_upsampling_ratios = []
@@ -42,15 +42,16 @@ class UpDownBackbone(nn.Module):
         scales = list(range(self.n_scales))
         self.bb_scales = scales + scales[-2::-1]
         self.num_classes = num_classes
+        self.aux_loss = aux_loss
 
-        #tot_out_dim = backbone_dims[-1]
-        #self.head_norm = nn.LayerNorm(tot_out_dim)
-        #self.head = MLP(tot_out_dim, tot_out_dim, num_classes, num_layers=3)
-        self.heads = nn.ModuleList()
-        for i in range(self.n_scales):
-            head = nn.Linear(backbone_dims[i - n_scales], num_classes)
-            self.heads.append(head)
-        #self.head = nn.Linear(tot_out_dim, num_classes)
+        if self.aux_loss:
+            self.heads = nn.ModuleList()
+            for i in range(self.n_scales):
+                head = nn.Linear(backbone_dims[i - n_scales], num_classes)
+                self.heads.append(head)
+        else:
+            out_dim = backbone_dims[-1]
+            self.head = nn.Linear(out_dim, num_classes)
 
         self.apply(self._init_weights)
 
@@ -129,16 +130,18 @@ class UpDownBackbone(nn.Module):
 
         outs['min_spatial_shape'] = output['min_spatial_shape']
 
-        out_preds = []
-        for i, f in enumerate(self.all_out_features):
-            feat = outs[f][-1]
-            pooled = feat.mean(1)
-            pred = self.heads[i](pooled)
-            out_preds.append(pred)
-        #out_scale_vectors = output[self.all_out_features[-1]]
-        #out_scale_vectors = out_scale_vectors.mean(1)
-        #out = self.head(out_scale_vectors)
-        return out_preds
+        if self.aux_loss:
+            out = []
+            for i, f in enumerate(self.all_out_features):
+                feat = outs[f][-1]
+                pooled = feat.mean(1)
+                pred = self.heads[i](pooled)
+                out.append(pred)
+        else:
+            out_scale_vectors = output[self.all_out_features[-1]]
+            out_scale_vectors = out_scale_vectors.mean(1)
+            out = self.head(out_scale_vectors)
+        return out
 
 
     def generate_random_upsampling_mask(self, batch_size, n_tokens):
