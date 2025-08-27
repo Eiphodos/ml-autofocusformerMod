@@ -34,7 +34,7 @@ _C.DATA.INTERPOLATION = 'bicubic'
 # Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.
 _C.DATA.PIN_MEMORY = True
 # Number of data loading threads
-_C.DATA.NUM_WORKERS = 8
+_C.DATA.NUM_WORKERS = 32
 
 # -----------------------------------------------------------------------------
 # Model settings
@@ -175,13 +175,13 @@ _C.TEST.CROP = True
 # Misc
 # -----------------------------------------------------------------------------
 # Pytorch native amp, overwritten by command line argument
-_C.AMP_ENABLE = False
+_C.AMP_ENABLE = True
 # Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
 _C.TAG = 'default'
 # Frequency to save checkpoint (epochs)
-_C.SAVE_FREQ = 10
+_C.SAVE_FREQ = 5
 # Frequency to logging info
 _C.PRINT_FREQ = 20
 # Frequency to validate (epochs)
